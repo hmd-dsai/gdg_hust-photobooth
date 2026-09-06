@@ -44,7 +44,7 @@ class LandmarkDataset(Dataset):
 
 
 class GestureDataset(LandmarkDataset):
-    """Binary GDG-vs-background dataset. Labels: 0 = noise/background, 1 = gdg. 126-d hand vectors."""
+    """Binary GDG-vs-background dataset. Labels: 0 = noise/background, 1 = gdg. 128-d hand vectors."""
     pass
 
 
