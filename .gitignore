@@ -16,8 +16,18 @@ dataset/
 
 # Generated features/checkpoints -- rebuild via pipeline/preprocess.py and
 # pipeline/train.py (see README's "Retraining the hand-gesture model").
-features/
-checkpoints/
+# Exceptions: gesture_model.pt (the actual trained gesture MLP) and
+# label_map.json (tiny, and required at *inference* runtime, not just
+# training -- see GestureEmotionPipeline.__init__) are shipped in the repo so
+# GitHub access alone is enough to run inference, minus the separately-sent
+# Hugging Face model cache. Everything else here stays generated-only:
+# checkpoints/emotion_model.pt is an unused from-scratch baseline (the live
+# pipeline uses the pretrained ViT instead), and features/*.npz are large
+# training-only feature arrays.
+features/*
+!features/label_map.json
+checkpoints/*
+!checkpoints/gesture_model.pt
 
 # Local demo output -- contains real captured photos from test sessions.
 demo/output/
