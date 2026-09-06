@@ -39,13 +39,15 @@ class _MLPBlock(nn.Module):
 class GestureClassifier(nn.Module):
     """
     Binary classifier over two-hand landmark vectors
-    (126-d = 21 landmarks x 3 coords x 2 hands, zero-padded per missing hand).
+    (128-d = 21 landmarks x 3 coords x 2 hands [zero-padded per missing hand],
+    plus 2 inter-hand fingertip-distance features -- see
+    landmark_utils.extract_two_hand_vector for the exact layout).
 
     Outputs a single raw logit per sample -- pair with BCEWithLogitsLoss for
     training and torch.sigmoid(...) for a probability at inference time.
     """
 
-    def __init__(self, input_dim: int = 126, hidden_dims=(128, 64), dropout: float = 0.3):
+    def __init__(self, input_dim: int = 128, hidden_dims=(128, 64), dropout: float = 0.3):
         super().__init__()
         dims = [input_dim] + list(hidden_dims)
         self.blocks = nn.Sequential(*[

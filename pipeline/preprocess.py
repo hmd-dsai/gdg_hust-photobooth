@@ -12,15 +12,16 @@ datasets from whichever landmarks Holistic actually finds:
     classifier needs a real face signal -- there's nothing meaningful to
     zero-pad here.
 
-  - HAND dataset (21 landmarks x 2 hands -> 126-d vector, zero-padded),
-    from
+  - HAND dataset (21 landmarks x 2 hands + 2 inter-hand distance features ->
+    128-d vector, zero-padded), from
         dataset/gdg/*.jpg    (label 1, "gdg")
         dataset/noise/*.jpg  (label 0, background)
     A missing hand is zero-padded, NOT discarded -- both classes legitimately
     contain frames with zero, one, or two hands visible, and the two
     per-image outputs (face vs. hand) are populated independently, so a
     missing hand on a gesture-dataset image never affects (and is never
-    affected by) any face detection in that same frame.
+    affected by) any face detection in that same frame. See
+    landmark_utils.extract_two_hand_vector for the full 128-d layout.
 
 Usage:
     python preprocess.py \
@@ -107,6 +108,7 @@ def extract_split(holistic, root_dir: str, classes, split_name: str, args, mode:
             n_skipped += 1
             continue
 
+        img_h, img_w = rgb.shape[:2]
         rgb.flags.writeable = False
         results = holistic.process(rgb)
 
@@ -118,15 +120,17 @@ def extract_split(holistic, root_dir: str, classes, split_name: str, args, mode:
             X.append(vec)
             y.append(label_idx)
         else:  # mode == "hand"
-            vec = extract_two_hand_vector(results.left_hand_landmarks, results.right_hand_landmarks)
-            # A positive ("gdg") sample with an all-zero vector means MediaPipe detected
-            # NO hands at all in this frame -- that's a detection failure, not evidence
-            # of the two-hand gesture, and keeping it mislabels "no hands visible" as a
-            # confident positive. Drop it rather than propagate that label noise.
-            # (A "noise"/background sample with an all-zero vector is legitimate --
+            vec = extract_two_hand_vector(results.left_hand_landmarks, results.right_hand_landmarks, img_w, img_h)
+            # A positive ("gdg") sample with an all-zero HAND vector (the first 126 dims --
+            # the inter-hand distance features in [126:128] are never 0, see
+            # MISSING_HAND_DISTANCE_PENALTY) means MediaPipe detected NO hands at all in
+            # this frame -- that's a detection failure, not evidence of the two-hand
+            # gesture, and keeping it mislabels "no hands visible" as a confident positive.
+            # Drop it rather than propagate that label noise.
+            # (A "noise"/background sample with an all-zero hand vector is legitimate --
             # "no hands visible" genuinely is a valid negative example -- so it's kept.)
             is_gdg = classes[label_idx] == "gdg"
-            if is_gdg and not vec.any():
+            if is_gdg and not vec[:126].any():
                 n_skipped += 1
                 continue
             X.append(vec)  # otherwise never discarded -- zero-padded when hand(s) absent

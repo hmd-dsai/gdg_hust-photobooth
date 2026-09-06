@@ -5,6 +5,14 @@ Shared helpers for turning MediaPipe Holistic output into fixed-size,
 translation- and scale-invariant feature vectors. Used by both preprocess.py
 (offline dataset building) and inference.py (live prediction), so the exact
 same math is applied at train time and at inference time.
+
+The 126-d two-hand vector (extract_two_hand_vector) normalizes each hand in
+its own independent local frame (wrist-centered, palm-scaled), which means it
+cannot see how far apart the two hands are from each other -- two correctly-
+shaped V-signs held far apart are nearly indistinguishable from two held
+close together forming "gdg", since neither hand's local vector encodes the
+other hand's position. compute_inter_hand_distances() / the two appended
+distance features address exactly that gap, making the full vector 128-d.
 """
 
 from typing import Optional
@@ -30,6 +38,23 @@ HAND_SCALE_IDX = 9            # MIDDLE_FINGER_MCP -> stable "palm size" scale re
                                # (using palm size rather than max finger extent keeps
                                # finger-spread/shape information intact post-normalization,
                                # which is exactly what a gesture classifier needs to see).
+
+# --- Inter-hand distance features -------------------------------------------
+# Used only by compute_inter_hand_distances() / extract_two_hand_vector() below --
+# NOT part of the per-hand local normalization above. These measure how far apart
+# the two hands' fingertips are (something the wrist-centered, palm-scaled 126-d
+# vector structurally cannot see, since each hand lives in its own independent
+# local coordinate frame -- see the module docstring below).
+INDEX_TIP_IDX = 8
+MIDDLE_TIP_IDX = 12
+INDEX_BONE_CHAIN = (5, 6, 7, 8)      # INDEX_MCP -> PIP -> DIP -> TIP
+MIDDLE_BONE_CHAIN = (9, 10, 11, 12)  # MIDDLE_MCP -> PIP -> DIP -> TIP
+
+# Sentinel for "can't be computed" (a hand is missing) -- deliberately NOT 0.0,
+# since a distance of 0 would read as "the two fingertips are touching", the
+# opposite of the truth. A large distance instead correctly reads as "these
+# fingertips are nowhere near each other".
+MISSING_HAND_DISTANCE_PENALTY = 99.0
 
 
 def landmarks_to_array(landmark_list) -> Optional[np.ndarray]:
@@ -84,15 +109,96 @@ def extract_hand_vector(hand_landmarks) -> np.ndarray:
     return pts.flatten()
 
 
-def extract_two_hand_vector(left_hand_landmarks, right_hand_landmarks) -> np.ndarray:
+def _aspect_corrected_points(hand_landmarks, aspect_ratio: float) -> Optional[np.ndarray]:
     """
-    Concatenate left + right hand vectors -> (NUM_HAND_LANDMARKS * 3 * 2,).
-    Whichever hand is absent contributes a zero-padded slice rather than
-    causing the sample to be discarded -- required because the "gdg" gesture
-    is defined by two hands together, but plenty of valid frames (both
-    positive mid-gesture and negative/background) only have zero or one
-    hand visible.
+    Raw (NUM_HAND_LANDMARKS, 3) landmark array with x scaled by the image's aspect
+    ratio (width / height). MediaPipe's x, y are each normalized to [0, 1] against
+    their own axis (width, height respectively) -- on a non-square frame those two
+    axes are not the same physical unit, so a plain Euclidean distance across x and
+    y would be warped. Scaling x by width/height re-expresses both axes in a common
+    unit (heights) before any distance is computed. z is left as-is (MediaPipe does
+    not document an equivalent correction for it). None if the hand wasn't detected.
+    """
+    pts = landmarks_to_array(hand_landmarks)
+    if pts is None:
+        return None
+    corrected = pts.copy()
+    corrected[:, 0] *= aspect_ratio
+    return corrected
+
+
+def _bone_chain_length(points: np.ndarray, chain) -> float:
+    """
+    Sum of consecutive-joint distances along `chain` (e.g. MCP->PIP->DIP->TIP).
+    Robust to a slightly bent finger, unlike a single straight-line MCP-to-tip
+    measurement, which shortens as soon as the finger curls even a little.
+    """
+    return float(sum(
+        np.linalg.norm(points[chain[i]] - points[chain[i + 1]])
+        for i in range(len(chain) - 1)
+    ))
+
+
+def compute_inter_hand_distances(left_hand_landmarks, right_hand_landmarks,
+                                  image_width: int, image_height: int) -> tuple:
+    """
+    (distance1, distance2): fingertip-to-fingertip distance between the two hands,
+    each normalized by that finger's own (bone-sum) length so the result reflects
+    "how many finger-lengths apart" rather than an absolute, frame-scale-dependent
+    number:
+      distance1 = ||left index tip (8) - right index tip (8)|| / avg(left, right index length)
+      distance2 = ||left middle tip (12) - right middle tip (12)|| / avg(left, right middle length)
+
+    Both distances (tip-to-tip and finger bone lengths) are computed in aspect-ratio-
+    corrected, full (x, y, z) space -- see _aspect_corrected_points.
+
+    Returns (MISSING_HAND_DISTANCE_PENALTY, MISSING_HAND_DISTANCE_PENALTY) if either
+    hand is missing: with only one (or zero) hands present there is no second
+    fingertip to measure to, and this is deliberately not 0.0 (see the constant's
+    docstring above).
+    """
+    aspect_ratio = image_width / image_height
+    left = _aspect_corrected_points(left_hand_landmarks, aspect_ratio)
+    right = _aspect_corrected_points(right_hand_landmarks, aspect_ratio)
+
+    if left is None or right is None:
+        return MISSING_HAND_DISTANCE_PENALTY, MISSING_HAND_DISTANCE_PENALTY
+
+    def normalized_tip_distance(tip_idx: int, chain) -> float:
+        tip_distance = float(np.linalg.norm(left[tip_idx] - right[tip_idx]))
+        avg_finger_length = (_bone_chain_length(left, chain) + _bone_chain_length(right, chain)) / 2.0
+        avg_finger_length = max(avg_finger_length, 1e-6)  # guard against a degenerate detection
+        return tip_distance / avg_finger_length
+
+    distance1 = normalized_tip_distance(INDEX_TIP_IDX, INDEX_BONE_CHAIN)
+    distance2 = normalized_tip_distance(MIDDLE_TIP_IDX, MIDDLE_BONE_CHAIN)
+    return distance1, distance2
+
+
+def extract_two_hand_vector(left_hand_landmarks, right_hand_landmarks,
+                             image_width: int, image_height: int) -> np.ndarray:
+    """
+    Concatenate left + right locally-normalized hand vectors, plus two inter-hand
+    distance features -> (NUM_HAND_LANDMARKS * 3 * 2 + 2,) = 128-d:
+      [0:63]   left hand  (wrist-centered, palm-scaled -- see extract_hand_vector)
+      [63:126] right hand (same)
+      [126]    distance1 -- normalized left/right index-fingertip distance
+      [127]    distance2 -- normalized left/right middle-fingertip distance
+
+    Whichever hand is absent contributes a zero-padded slice in [0:126] rather than
+    causing the sample to be discarded -- required because the "gdg" gesture is
+    defined by two hands together, but plenty of valid frames (both positive
+    mid-gesture and negative/background) only have zero or one hand visible. The
+    two distance features get MISSING_HAND_DISTANCE_PENALTY instead of 0.0 in that
+    same situation, for the reason documented on that constant.
+
+    `image_width` / `image_height` (the source frame's pixel dimensions) are
+    required to aspect-ratio-correct the distance features -- see
+    compute_inter_hand_distances.
     """
     left = extract_hand_vector(left_hand_landmarks)
     right = extract_hand_vector(right_hand_landmarks)
-    return np.concatenate([left, right])
+    distance1, distance2 = compute_inter_hand_distances(
+        left_hand_landmarks, right_hand_landmarks, image_width, image_height
+    )
+    return np.concatenate([left, right, np.array([distance1, distance2], dtype=np.float32)])
