@@ -1,0 +1,15 @@
+{
+  "emotion_classes": [
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "sad",
+    "surprise",
+    "neutral"
+  ],
+  "gesture_classes": [
+    "noise",
+    "gdg"
+  ]
+}
