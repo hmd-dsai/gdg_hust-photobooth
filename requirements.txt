@@ -1,0 +1,5 @@
+mediapipe==0.10.21
+torch==2.13.0
+torchvision==0.28.0
+transformers==5.15.1
+pillow==12.3.0
