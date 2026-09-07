@@ -6,6 +6,12 @@ still outside pipeline/ and still importing GestureEmotionPipeline as a plain
 consumer would (nothing in pipeline/ is modified).
 
 A 4-step photobooth minigame:
+  0. Every frame is center-cropped to CAMERA_ASPECT_RATIO (4:3, see
+     split_screen_demo.crop_to_aspect) immediately after capture, before
+     anything else touches it. This is a plain geometric crop -- no face
+     detection -- so it can never single out one person in a multi-person
+     shot; it also means the live view, the model's input, and the saved
+     photo are always exactly the same framing (WYSIWYG).
   1. Prompts the player through a fixed sequence of gestures/emotions
      (happy -> angry -> surprise -> gdg), showing each target's reference
      photo as a thumbnail in the corner of the live webcam view.
@@ -17,9 +23,11 @@ A 4-step photobooth minigame:
      captured for that step, a brief "captured!" flash is shown, and the
      game advances to the next target.
   4. After all 4 steps, composes a 4x2 photobooth strip -- one row per
-     gesture, left column = the player's captured photo (square-cropped),
-     right column = the reference photo -- and saves both the strip and the
-     4 individual captures to demo/output/session_<timestamp>/.
+     gesture, left column = the player's captured photo at its real 4:3 shape
+     (resized, not cropped further -- the framing was already decided once,
+     at capture time), right column = the (square) reference photo -- and
+     saves both the strip and the 4 individual 4:3 captures to
+     demo/output/session_<timestamp>/.
 
 Usage:
     python photobooth_challenge.py
@@ -39,7 +47,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "pipeline"))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from inference import GestureEmotionPipeline, DEFAULT_GESTURE_THRESHOLD  # noqa: E402
-from split_screen_demo import load_reference_panels, square_crop_resize  # noqa: E402
+from split_screen_demo import CAMERA_ASPECT_RATIO, crop_to_aspect, load_reference_panels  # noqa: E402
 
 GESTURE_SEQUENCE = ["happy", "angry", "surprise", "gdg"]
 HOLD_SECONDS_DEFAULT = 1.0
@@ -89,10 +97,22 @@ def draw_captured_flash(frame, target_label):
 
 
 def build_photobooth_strip(captures: dict, panels: dict, panel_size: int) -> np.ndarray:
-    """4x2 grid: one row per gesture (GESTURE_SEQUENCE order), left=player photo, right=reference."""
+    """
+    4x2 grid: one row per gesture (GESTURE_SEQUENCE order), left=player photo,
+    right=reference. The player's photo is shown at its real CAMERA_ASPECT_RATIO
+    (4:3) shape -- just resized to a fixed height, not cropped down to a square --
+    since it was already framed once (crop_to_aspect, at capture time) and cropping
+    it *again* here would just be re-losing more of what the player actually saw
+    and posed within. Only the reference panel (a separate, pre-existing square
+    asset) stays square; there's no requirement the two match shape until there's
+    a real designed frame to composite into instead of this plain grid.
+    """
+    user_cell_width = int(round(panel_size * CAMERA_ASPECT_RATIO))
     rows = []
     for label in GESTURE_SEQUENCE:
-        user_cell = square_crop_resize(captures[label], panel_size)
+        user_img = captures[label]
+        interp = cv2.INTER_AREA if panel_size < user_img.shape[0] else cv2.INTER_CUBIC
+        user_cell = cv2.resize(user_img, (user_cell_width, panel_size), interpolation=interp)
         ref_cell = panels[label]
         row = np.hstack([user_cell, ref_cell])
         cap = np.zeros((CAPTION_HEIGHT, row.shape[1], 3), dtype=np.uint8)
@@ -144,6 +164,7 @@ def main():
                     aborted = True
                     break
                 frame = cv2.flip(frame, 1)
+                frame = crop_to_aspect(frame)  # WYSIWYG: same crop for display, model input, and capture
                 clean_frame = frame.copy()  # captured, if this frame wins the hold -- no overlays baked in
 
                 result = pipeline.predict(frame, gesture_threshold=args.threshold)

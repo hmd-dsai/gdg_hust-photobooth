@@ -10,7 +10,11 @@ pipeline/inference.py's GestureEmotionPipeline to ship as-is to a web backend
 later; this script is just a throwaway way to eyeball predictions locally.
 
 Shows a 1x2 split screen instead of a text label overlay:
-  - left:  the live webcam feed
+  - left:  the live webcam feed, center-cropped to CAMERA_ASPECT_RATIO (4:3)
+           right after capture -- the same cropped frame is what's shown,
+           what's fed to the model, and (in photobooth_challenge.py) what's
+           saved, so there's never a mismatch between what you see and what
+           gets analyzed.
   - right: the reference photo for whatever the pipeline just predicted
            (from labeled/), square-cropped and size-normalized so all 8
            reference photos -- which arrive in wildly different sizes and
@@ -49,6 +53,35 @@ LABEL_IMAGE_MAP = {
 
 CAPTION_HEIGHT = 40
 PLACEHOLDER_BG = (40, 40, 40)  # dark gray, for "no detection"
+
+# The webcam's native frame is cropped to this aspect ratio (width / height) ONCE,
+# immediately after capture -- before display, before the model, before anything
+# else -- so the live view, the model's input, and the saved photo are always the
+# exact same framing (WYSIWYG). This is a plain geometric center-crop with no face
+# detection involved: it can never single out one person in a multi-person shot,
+# it just consistently keeps the middle of the frame. 4:3 landscape, matching a
+# classic photobooth look while trimming less than a full square crop would.
+CAMERA_ASPECT_RATIO = 4 / 3
+
+
+def crop_to_aspect(frame: np.ndarray, target_ratio: float = CAMERA_ASPECT_RATIO) -> np.ndarray:
+    """
+    Center-crop `frame` to `target_ratio` (width / height), trimming whichever
+    dimension is in excess -- the *other* dimension is kept at its full native
+    extent. No resizing here, so this only changes framing, not resolution/quality.
+    """
+    h, w = frame.shape[:2]
+    current_ratio = w / h
+    if current_ratio > target_ratio:
+        # wider than target -> trim width, keep full height
+        new_w = int(round(h * target_ratio))
+        x0 = (w - new_w) // 2
+        return frame[:, x0:x0 + new_w]
+    else:
+        # taller than target (or already narrower) -> trim height, keep full width
+        new_h = int(round(w / target_ratio))
+        y0 = (h - new_h) // 2
+        return frame[y0:y0 + new_h, :]
 
 
 def square_crop_resize(img: np.ndarray, size: int) -> np.ndarray:
@@ -133,6 +166,7 @@ def main():
                 if not ret:
                     break
                 frame = cv2.flip(frame, 1)
+                frame = crop_to_aspect(frame)  # WYSIWYG: display, model input, and any capture all use this
 
                 result = pipeline.predict(frame, gesture_threshold=args.threshold)
                 label = result["label"]
