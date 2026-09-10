@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>GDG on Campus HUST — Photobooth Studio</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..24,400..600,0,0" />
+  <!-- QR Code & Confetti Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <link rel="icon" type="image/png" href="/branding/gdg-logo.png">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Studio Header -->
+    <header class="studio-header">
+      <div class="brand-group">
+        <div class="brand-symbol" title="Google Developer Groups on Campus">
+          <img src="/branding/gdg-logo.png" alt="GDG Logo" class="gdg-logo">
+        </div>
+        <div class="brand-titles">
+          <span class="brand-tag">GDG on Campus • HUST</span>
+          <h1 class="brand-name">Photobooth Studio</h1>
+        </div>
+      </div>
+
+      <!-- Live Broadcast Telemetry Indicator -->
+      <div class="camera-status-pill">
+        <span class="rec-dot"></span>
+        <span class="rec-text">LIVE VIEW</span>
+        <span class="rec-spec">4:3 HD</span>
+      </div>
+
+      <!-- Controls -->
+      <div class="header-actions">
+        <div class="segmented-control">
+          <button id="btnChallengeMode" class="segment-btn active">
+            <span class="material-symbols-rounded">stars</span>
+            <span>Thử thách</span>
+          </button>
+          <button id="btnMirrorMode" class="segment-btn">
+            <span class="material-symbols-rounded">view_carousel</span>
+            <span>Tự do</span>
+          </button>
+        </div>
+
+        <div class="select-wrapper">
+          <span class="material-symbols-rounded select-icon">videocam</span>
+          <select id="cameraSelect" class="studio-select" title="Chọn Camera">
+            <option value="">Đang tìm camera...</option>
+          </select>
+        </div>
+
+        <button id="btnOpenSettings" class="icon-button" title="Cài đặt Imgur & Photobooth" aria-label="Settings">
+          <span class="material-symbols-rounded">tune</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="studio-workspace">
+      <!-- Challenge Viewport -->
+      <section id="challengeSection" class="viewport-section active">
+        <!-- Unified Studio Stage (Step Grid & Camera Viewfinder aligned 1:1) -->
+        <div class="studio-stage-container">
+          <!-- Studio Step Progress Header (4 equal columns spanning camera width) -->
+          <div class="step-progress-grid">
+            <div class="step-progress-item active" data-step="0">
+              <div class="step-line"></div>
+              <div class="step-content">
+                <span class="step-num font-mono">01</span>
+                <span class="step-title">HAPPY</span>
+              </div>
+            </div>
+
+            <div class="step-progress-item" data-step="1">
+              <div class="step-line"></div>
+              <div class="step-content">
+                <span class="step-num font-mono">02</span>
+                <span class="step-title">ANGRY</span>
+              </div>
+            </div>
+
+            <div class="step-progress-item" data-step="2">
+              <div class="step-line"></div>
+              <div class="step-content">
+                <span class="step-num font-mono">03</span>
+                <span class="step-title">SURPRISE</span>
+              </div>
+            </div>
+
+            <div class="step-progress-item" data-step="3">
+              <div class="step-line"></div>
+              <div class="step-content">
+                <span class="step-num font-mono">04</span>
+                <span class="step-title">GDG SIGN</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Camera Viewfinder Stage Frame -->
+          <div class="viewfinder-frame">
+            <video id="videoFeed" playsinline autoplay muted></video>
+            <canvas id="captureCanvas" style="display: none;"></canvas>
+
+            <!-- Shutter Optical Flash -->
+            <div id="flashOverlay" class="shutter-flash"></div>
+
+            <!-- Optical Reticle Corners -->
+            <div class="reticle-corner corner-tl"></div>
+            <div class="reticle-corner corner-tr"></div>
+            <div class="reticle-corner corner-bl"></div>
+            <div class="reticle-corner corner-br"></div>
+
+            <!-- Studio Pro HUD -->
+            <div class="viewfinder-hud">
+              <!-- Bottom-Left Telemetry -->
+              <div class="telemetry-pill">
+                <div class="telemetry-item">
+                  <span class="tel-label">MODEL</span>
+                  <span class="tel-val font-mono">ViT + MLP</span>
+                </div>
+                <div class="tel-divider"></div>
+                <div class="telemetry-item">
+                  <span class="tel-label">INFERENCE</span>
+                  <span class="tel-val font-mono" id="hudLiveLabel">Ready...</span>
+                </div>
+                <div class="tel-divider"></div>
+                <div class="telemetry-item">
+                  <span class="tel-label">CONF</span>
+                  <span class="tel-val font-mono" id="hudConfidence">--%</span>
+                </div>
+              </div>
+
+              <!-- Top-Right Director Cue Prompt -->
+              <div class="cue-card" id="targetCard">
+                <div class="cue-header">
+                  <span class="cue-tag">MỤC TIÊU CẦN TẠO</span>
+                  <h3 class="cue-title" id="targetLabelText">HAPPY</h3>
+                </div>
+
+                <div class="cue-image-frame">
+                  <img id="targetThumbImg" src="/api/reference/happy" alt="Target Expression">
+                </div>
+
+                <div class="cue-timer-wrap">
+                  <div class="cue-progress-track">
+                    <div class="cue-progress-fill" id="holdProgressBar"></div>
+                  </div>
+                  <div class="cue-status-row">
+                    <span class="cue-hint" id="holdHint">Giữ tư thế 1.0 giây</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Free Mirror Viewport -->
+      <section id="mirrorSection" class="viewport-section">
+        <div class="mirror-split">
+          <div class="mirror-panel">
+            <div class="panel-header">
+              <span class="material-symbols-rounded">videocam</span>
+              <span>Webcam trực tiếp</span>
+            </div>
+            <div class="panel-media">
+              <video id="mirrorVideoFeed" playsinline autoplay muted></video>
+            </div>
+          </div>
+
+          <div class="mirror-panel">
+            <div class="panel-header">
+              <span class="material-symbols-rounded">psychology</span>
+              <span>Khuôn mẫu AI phát hiện</span>
+            </div>
+            <div class="panel-media panel-ref">
+              <img id="mirrorRefImg" src="/api/reference/neutral" alt="Detected reference">
+              <div class="ref-badge" id="mirrorCaption">Đang nhận diện...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal: Studio Photostrip & QR Handout -->
+    <div id="resultModal" class="modal-dialog">
+      <div class="dialog-backdrop"></div>
+      <div class="dialog-window">
+        <div class="dialog-header">
+          <div class="dialog-title-wrap">
+            <span class="badge-success">
+              <span class="material-symbols-rounded">verified</span>
+              <span>SESSION COMPLETE</span>
+            </span>
+            <h2 class="dialog-heading">Dải ảnh Photobooth của bạn</h2>
+          </div>
+          <button id="btnCloseModal" class="icon-button dialog-close" title="Đóng">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+
+        <div class="dialog-body">
+          <!-- Physical Photostrip Print Preview -->
+          <div class="photostrip-artboard">
+            <div class="photostrip-matting">
+              <img id="stripResultImg" alt="Photobooth Strip Result">
+            </div>
+          </div>
+
+          <!-- Studio Pass / QR Sharing Card -->
+          <div class="handout-panel">
+            <div class="ticket-card">
+              <div class="ticket-header">
+                <div class="ticket-brand-group">
+                  <img src="/branding/gdg-logo.png" alt="GDG Logo" class="ticket-logo">
+                  <span class="ticket-brand">GDG ON CAMPUS HUST</span>
+                </div>
+                <span class="ticket-tag" id="cloudBadgeText">Cloud Ready</span>
+              </div>
+
+              <div class="qr-ticket-core">
+                <div class="qr-print-box">
+                  <div class="qrcode-target" id="qrcodeContainer"></div>
+                </div>
+                <p class="qr-help-text">Mở camera điện thoại quét mã để xem và tải ảnh về thư viện</p>
+              </div>
+
+              <div class="ticket-url-row">
+                <input type="text" id="cloudDirectUrlInput" readonly title="Link ảnh">
+                <button id="btnCopyLink" class="copy-btn" title="Sao chép link">
+                  <span class="material-symbols-rounded">content_copy</span>
+                  <span>Copy</span>
+                </button>
+              </div>
+
+              <div class="ticket-external-link">
+                <a id="cloudDirectLink" href="#" target="_blank" rel="noopener" class="direct-link">
+                  <span class="material-symbols-rounded">open_in_new</span>
+                  <span>Mở ảnh trực tiếp trên trình duyệt</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- Action CTAs -->
+            <div class="handout-actions">
+              <a id="btnDownloadStrip" class="cta-button primary" download="gdg_photobooth_strip.jpg">
+                <span class="material-symbols-rounded">download</span>
+                <span>Tải ảnh gốc (HD)</span>
+              </a>
+              <button id="btnRestartChallenge" class="cta-button secondary">
+                <span class="material-symbols-rounded">replay</span>
+                <span>Chụp lại lượt mới</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Studio Configuration -->
+    <div id="settingsModal" class="modal-dialog">
+      <div class="dialog-backdrop"></div>
+      <div class="dialog-window dialog-settings">
+        <div class="dialog-header">
+          <div class="dialog-title-wrap">
+            <h2 class="dialog-heading">Cài đặt Studio</h2>
+          </div>
+          <button id="btnCloseSettingsModal" class="icon-button dialog-close" title="Đóng">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+
+        <div class="settings-content">
+          <!-- Imgur Configuration -->
+          <div class="form-section">
+            <div class="form-section-head">
+              <label class="form-label" for="settingImgurClientId">Imgur Client ID</label>
+              <span class="form-desc">Lưu trữ ảnh trên Imgur đám mây để quét mã QR tải về bất cứ lúc nào.</span>
+            </div>
+
+            <div class="input-action-group">
+              <input type="text" id="settingImgurClientId" class="text-field" placeholder="Nhập Client-ID từ Imgur..." autocomplete="off">
+              <button id="btnVerifyImgur" class="cta-button compact">
+                <span>Kiểm tra</span>
+              </button>
+            </div>
+            <div id="imgurVerifyStatus" class="form-status"></div>
+            <p class="form-hint">
+              💡 Bạn có thể tạo miễn phí tại <a href="https://api.imgur.com/oauth2/addclient" target="_blank" rel="noopener">api.imgur.com</a>. Nếu để trống, hệ thống sẽ sử dụng CDN đám mây dự phòng.
+            </p>
+          </div>
+
+          <!-- Theme Palette -->
+          <div class="form-section">
+            <div class="form-section-head">
+              <label class="form-label">Phong cách dải ảnh (Strip Theme)</label>
+              <span class="form-desc">Chọn màu nền và kiểu khung dải ảnh sau khi chụp.</span>
+            </div>
+
+            <div class="theme-picker-grid">
+              <label class="theme-card active" data-theme="gdg_dark">
+                <input type="radio" name="stripTheme" value="gdg_dark" checked>
+                <div class="card-visual visual-dark">
+                  <div class="swatch-header">GDG DARK</div>
+                  <div class="swatch-stripes">
+                    <span class="c-blue"></span>
+                    <span class="c-red"></span>
+                    <span class="c-yellow"></span>
+                    <span class="c-green"></span>
+                  </div>
+                </div>
+                <span class="card-name">GDG Obsidian (Chuẩn)</span>
+              </label>
+
+              <label class="theme-card" data-theme="life4cuts_white">
+                <input type="radio" name="stripTheme" value="life4cuts_white">
+                <div class="card-visual visual-white">
+                  <div class="swatch-header dark">LIFE4CUTS</div>
+                  <div class="swatch-stripes">
+                    <span class="c-blue"></span>
+                    <span class="c-red"></span>
+                    <span class="c-yellow"></span>
+                    <span class="c-green"></span>
+                  </div>
+                </div>
+                <span class="card-name">Korean White Film</span>
+              </label>
+
+              <label class="theme-card" data-theme="cyber_neon">
+                <input type="radio" name="stripTheme" value="cyber_neon">
+                <div class="card-visual visual-cyber">
+                  <div class="swatch-header neon">CYBER</div>
+                  <div class="swatch-stripes">
+                    <span class="c-cyan"></span>
+                    <span class="c-magenta"></span>
+                  </div>
+                </div>
+                <span class="card-name">Cyberpunk Noir</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Hold Timing -->
+          <div class="form-section">
+            <div class="form-section-head">
+              <label class="form-label" for="settingHoldDuration">Thời gian giữ biểu cảm</label>
+              <span class="form-desc">Thời gian cần duy trì cảm xúc chuẩn để máy bấm chụp.</span>
+            </div>
+            <select id="settingHoldDuration" class="select-field">
+              <option value="800">0.8 giây (Rất nhanh — chụp sự kiện đông)</option>
+              <option value="1000" selected>1.0 giây (Tiêu chuẩn cân bằng)</option>
+              <option value="1200">1.2 giây (Chắc chắn & ổn định)</option>
+              <option value="1500">1.5 giây (Thử thách độ biểu cảm)</option>
+            </select>
+          </div>
+
+          <!-- Audio FX -->
+          <div class="form-section-toggle">
+            <div class="toggle-text">
+              <label class="form-label" for="settingSoundEnabled">Âm thanh trập ảnh cơ học</label>
+              <span class="form-desc">Phát âm trập máy ảnh thực tế khi lưu khoảnh khắc.</span>
+            </div>
+            <label class="switch-control">
+              <input type="checkbox" id="settingSoundEnabled" checked>
+              <span class="switch-track"></span>
+            </label>
+          </div>
+
+          <div class="form-submit-row">
+            <button id="btnSaveSettings" class="cta-button primary full-width">
+              <span>Lưu cấu hình</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Minimalist Toast -->
+    <div id="toast" class="studio-toast"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
