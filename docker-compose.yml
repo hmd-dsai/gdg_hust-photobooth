@@ -1,0 +1,16 @@
+services:
+  photobooth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gdg-photobooth
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./output:/app/output
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    environment:
+      - PYTHONUNBUFFERED=1
+      - IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID:-}
