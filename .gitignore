@@ -31,3 +31,4 @@ checkpoints/*
 
 # Local demo output -- contains real captured photos from test sessions.
 demo/output/
+output/
