@@ -24,7 +24,8 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "pipeline"))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "demo"))
 
 from inference import DEFAULT_GESTURE_THRESHOLD, GestureEmotionPipeline
-from split_screen_demo import CAMERA_ASPECT_RATIO, LABEL_IMAGE_MAP, crop_to_aspect, load_reference_panels
+from split_screen_demo import LABEL_IMAGE_MAP, crop_to_aspect, load_reference_panels
+from frame_compositor import build_framed_strip, load_references
 
 CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "checkpoints")
 FEATURES_DIR = os.path.join(PROJECT_ROOT, "features")
@@ -81,8 +82,7 @@ class PredictRequest(BaseModel):
 
 class ComposeRequest(BaseModel):
     captures: Dict[str, str]  # Map of label -> base64 image
-    panel_size: Optional[int] = 420
-    theme: Optional[str] = "gdg_dark"  # "gdg_dark", "life4cuts_white", "cyber_neon"
+    panel_size: Optional[int] = 420  # unused now that the strip uses the fixed designed frame
     imgur_client_id: Optional[str] = None
 
 
@@ -156,30 +156,6 @@ def predict(req: PredictRequest):
         "gesture_confidence": round(float(result.get("gesture_confidence", 0.0)), 4),
         "reference_url": f"/api/reference/{label}" if label in LABEL_IMAGE_MAP else None,
     }
-
-
-def overlay_official_gdg_logo(canvas: np.ndarray, x: int, y: int, size: int = 72):
-    """Overlays the official Google Developer Groups bracket logo with transparency."""
-    logo_path = os.path.join(STATIC_DIR, "branding", "gdg-logo.png")
-    if not os.path.exists(logo_path):
-        return
-    logo_rgba = cv2.imread(logo_path, cv2.IMREAD_UNCHANGED)
-    if logo_rgba is None:
-        return
-
-    resized = cv2.resize(logo_rgba, (size, size), interpolation=cv2.INTER_AREA)
-    h, w = resized.shape[:2]
-    can_h, can_w = canvas.shape[:2]
-    if y + h > can_h or x + w > can_w or y < 0 or x < 0:
-        return
-
-    roi = canvas[y:y + h, x:x + w]
-    if resized.shape[2] == 4:
-        alpha = resized[:, :, 3:4].astype(float) / 255.0
-        rgb = resized[:, :, :3]
-        canvas[y:y + h, x:x + w] = (alpha * rgb + (1.0 - alpha) * roi).astype(np.uint8)
-    else:
-        canvas[y:y + h, x:x + w] = resized[:, :, :3]
 
 
 def get_lan_ip() -> str:
@@ -298,125 +274,26 @@ def verify_imgur(req: ImgurVerifyRequest):
 
 @app.post("/api/challenge/compose")
 def compose_strip(req: ComposeRequest):
-    """Composes a stylish Photobooth Strip from 4 challenge captures with customizable themes."""
+    """Composes the GDG-designed Photobooth Strip (demo/assets/frame.png) from 4 challenge captures."""
     missing = [k for k in GESTURE_SEQUENCE if k not in req.captures]
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing captures for: {missing}")
-
-    panel_size = max(240, min(800, req.panel_size or 420))
-    user_cell_width = int(round(panel_size * CAMERA_ASPECT_RATIO))
-    row_width = user_cell_width + panel_size
-    caption_h = 44
-    theme = req.theme or "gdg_dark"
-
-    # Theme palette definition
-    if theme == "life4cuts_white":
-        bg_color = (248, 248, 250)         # Soft polaroid white
-        text_color = (30, 30, 34)           # Charcoal black
-        subtext_color = (120, 120, 130)     # Muted grey
-        header_bg = (242, 243, 246)
-        caption_bg = (248, 248, 250)
-        border_color = (220, 222, 228)
-    elif theme == "cyber_neon":
-        bg_color = (18, 12, 8)              # Cyber dark blue
-        text_color = (255, 240, 0)          # Neon cyan
-        subtext_color = (220, 100, 255)     # Neon magenta
-        header_bg = (14, 9, 6)
-        caption_bg = (18, 12, 8)
-        border_color = (120, 200, 0)
-    else:  # "gdg_dark" (default)
-        bg_color = (24, 23, 22)             # Deep sleek dark slate
-        text_color = (255, 255, 255)        # Pure white
-        subtext_color = (180, 185, 192)     # Google secondary grey
-        header_bg = (20, 19, 18)
-        caption_bg = (24, 23, 22)
-        border_color = (48, 50, 58)
 
     session_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_dir = os.path.join(OUTPUT_DIR, f"session_{session_ts}")
     os.makedirs(session_dir, exist_ok=True)
 
-    # Load fresh panels at requested size
-    panels = load_reference_panels(LABELED_DIR, panel_size)
-
-    rows = []
-    step_num = 1
+    captures = {}
     for label in GESTURE_SEQUENCE:
         try:
             user_img = decode_base64_image(req.captures[label])
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Bad image for {label}: {e}")
+        cv2.imwrite(os.path.join(session_dir, f"{label}.jpg"), user_img)  # save raw capture
+        captures[label] = user_img
 
-        # Save individual raw user capture
-        cv2.imwrite(os.path.join(session_dir, f"{label}.jpg"), user_img)
-
-        # Resize user cell maintaining 4:3
-        interp = cv2.INTER_AREA if panel_size < user_img.shape[0] else cv2.INTER_CUBIC
-        user_cell = cv2.resize(user_img, (user_cell_width, panel_size), interpolation=interp)
-        ref_cell = panels[label]
-
-        # Cell border separator
-        sep_w = 4
-        sep = np.zeros((panel_size, sep_w, 3), dtype=np.uint8)
-        sep[:] = border_color
-
-        row_content = np.hstack([user_cell, sep, ref_cell])
-
-        # Caption header for each step
-        cap = np.zeros((caption_h, row_width + sep_w, 3), dtype=np.uint8)
-        cap[:] = caption_bg
-
-        label_display = label.upper() if label != "gdg" else "GDG HAND SIGN (< >)"
-        cv2.putText(cap, f"0{step_num} / {label_display}", (20, caption_h - 14),
-                    cv2.FONT_HERSHEY_DUPLEX, 0.65, text_color, 1, cv2.LINE_AA)
-        
-        step_num += 1
-        rows.append(np.vstack([cap, row_content]))
-
-    grid = np.vstack(rows)
-    total_w = grid.shape[1]
-
-    # Header branding
-    header_h = 96
-    header = np.zeros((header_h, total_w, 3), dtype=np.uint8)
-    header[:] = header_bg
-
-    cv2.putText(header, "GDG ON CAMPUS HUST", (24, 40),
-                cv2.FONT_HERSHEY_DUPLEX, 0.92, text_color, 2, cv2.LINE_AA)
-    cv2.putText(header, "AI PHOTOBOOTH CHALLENGE", (24, 70),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.60, (244, 133, 66), 1, cv2.LINE_AA)
-
-    # Overlay official GDG Logo on right side of header
-    logo_size = 68
-    logo_x = total_w - logo_size - 24
-    logo_y = (header_h - logo_size) // 2
-    overlay_official_gdg_logo(header, logo_x, logo_y, size=logo_size)
-
-    # Google 4-color accent bar under header
-    bar_h = 5
-    seg_w = total_w / 4.0
-    colors_bgr = [(244, 133, 66), (53, 67, 234), (4, 188, 251), (88, 168, 52)]  # Blue, Red, Yellow, Green
-    for i, col in enumerate(colors_bgr):
-        x_start = int(round(i * seg_w))
-        x_end = int(round((i + 1) * seg_w))
-        header[header_h - bar_h:header_h, x_start:x_end] = col
-
-    # Footer
-    footer_h = 56
-    footer = np.zeros((footer_h, total_w, 3), dtype=np.uint8)
-    footer[:] = header_bg
-    date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cv2.putText(footer, f"Captured: {date_str} | Google Developer Groups on Campus HUST",
-                (22, footer_h - 22), cv2.FONT_HERSHEY_SIMPLEX, 0.48, subtext_color, 1, cv2.LINE_AA)
-    overlay_official_gdg_logo(footer, total_w - 42, (footer_h - 26) // 2, size=26)
-
-    # 4-color accent top line for footer
-    for i, col in enumerate(colors_bgr):
-        x_start = int(round(i * seg_w))
-        x_end = int(round((i + 1) * seg_w))
-        footer[0:3, x_start:x_end] = col
-
-    final_strip = np.vstack([header, grid, footer])
+    references = load_references(LABELED_DIR)
+    final_strip = build_framed_strip(captures, references)
 
     strip_path = os.path.join(session_dir, "photobooth_strip.jpg")
     cv2.imwrite(strip_path, final_strip)

@@ -10,7 +10,6 @@ const PREDICT_INTERVAL_MS = 180; // ~5.5 FPS
 // Persistent Settings State
 const SETTINGS = {
   imgurClientId: localStorage.getItem("gdg_imgur_client_id") || "",
-  stripTheme: localStorage.getItem("gdg_strip_theme") || "gdg_dark",
   holdDurationMs: parseInt(localStorage.getItem("gdg_hold_duration") || "1000", 10),
   soundEnabled: localStorage.getItem("gdg_sound_enabled") !== "false",
 };
@@ -70,7 +69,6 @@ const imgurVerifyStatus = document.getElementById("imgurVerifyStatus");
 const settingHoldDuration = document.getElementById("settingHoldDuration");
 const settingSoundEnabled = document.getElementById("settingSoundEnabled");
 const btnSaveSettings = document.getElementById("btnSaveSettings");
-const themeCards = document.querySelectorAll(".theme-card");
 
 // Audio Engine (Acoustic Web Audio Dual-stage Camera Shutter)
 let audioCtx = null;
@@ -372,7 +370,6 @@ async function onChallengeComplete() {
     const payload = {
       captures: captures,
       panel_size: 420,
-      theme: SETTINGS.stripTheme,
       imgur_client_id: SETTINGS.imgurClientId || undefined,
     };
 
@@ -463,25 +460,11 @@ btnOpenSettings.addEventListener("click", () => {
   settingSoundEnabled.checked = SETTINGS.soundEnabled;
   imgurVerifyStatus.innerHTML = "";
 
-  themeCards.forEach(card => {
-    const isCur = card.dataset.theme === SETTINGS.stripTheme;
-    card.classList.toggle("active", isCur);
-    card.querySelector("input").checked = isCur;
-  });
-
   settingsModal.classList.add("show");
 });
 
 btnCloseSettingsModal.addEventListener("click", () => {
   settingsModal.classList.remove("show");
-});
-
-themeCards.forEach(card => {
-  card.addEventListener("click", () => {
-    themeCards.forEach(c => c.classList.remove("active"));
-    card.classList.add("active");
-    card.querySelector("input").checked = true;
-  });
 });
 
 btnVerifyImgur.addEventListener("click", async () => {
@@ -520,13 +503,7 @@ btnSaveSettings.addEventListener("click", () => {
   SETTINGS.holdDurationMs = parseInt(settingHoldDuration.value, 10);
   SETTINGS.soundEnabled = settingSoundEnabled.checked;
 
-  const selTheme = document.querySelector('input[name="stripTheme"]:checked');
-  if (selTheme) {
-    SETTINGS.stripTheme = selTheme.value;
-  }
-
   localStorage.setItem("gdg_imgur_client_id", SETTINGS.imgurClientId);
-  localStorage.setItem("gdg_strip_theme", SETTINGS.stripTheme);
   localStorage.setItem("gdg_hold_duration", SETTINGS.holdDurationMs.toString());
   localStorage.setItem("gdg_sound_enabled", SETTINGS.soundEnabled ? "true" : "false");
 
