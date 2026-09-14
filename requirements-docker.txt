@@ -1,7 +1,12 @@
-mediapipe==0.10.21
+mediapipe==0.10.18
 transformers>=4.38.0
 pillow>=10.0.0
-opencv-python-headless>=4.8.0
+# No explicit opencv pin here on purpose: mediapipe already depends on
+# opencv-contrib-python and pulls it in transitively. Also pinning
+# opencv-python-headless installs a SECOND package that provides the same
+# cv2 module into the same site-packages/cv2/ directory -- it happened to
+# still work (install-order luck), but it's the exact dual-opencv landmine
+# this project already hit and fixed once before in the local dev venv.
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
 python-multipart>=0.0.9
