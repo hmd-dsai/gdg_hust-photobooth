@@ -13,7 +13,7 @@ Dự án này đã được đóng gói hoàn chỉnh thành một **Web Applica
 2. **Giao diện Web Photobooth hiện đại (GDG Branding)**:
    - **Chế độ Thử thách (Challenge Mode)**: Lần lượt hướng dẫn người chơi thực hiện 4 dáng (`Happy -> Angry -> Surprise -> GDG Hand Sign`). Khi giữ đúng biểu cảm đủ 1.0 giây, hệ thống kích hoạt hiệu ứng flash + âm thanh chụp ảnh và tự động chuyển bước.
    - **Chế độ Tự do (Live Mirror)**: So sánh trực quan màn hình webcam và ảnh mẫu tham chiếu tương ứng thời gian thực.
-   - **Tự động ghép Photobooth Strip 4x2**: Sau khi hoàn tất, hệ thống tự xuất dải ảnh photobooth mang thương hiệu GDG on Campus HUST kèm ngày giờ và nút bấm tải về máy.
+   - **Tự động ghép Photobooth Strip 4x2**: Sau khi hoàn tất, hệ thống tự xuất dải ảnh photobooth mang thương hiệu GDG-HUST kèm ngày giờ và nút bấm tải về máy.
 3. **Lưu trữ ảnh đã chụp**:
    - Các ảnh chụp và dải ảnh strip được tự động lưu vào thư mục `output/session_<timestamp>/` trên máy chủ.
 

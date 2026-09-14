@@ -1,5 +1,5 @@
 /**
- * GDG on Campus HUST — Photobooth Studio
+ * GDG-HUST - Photobooth Studio
  * Professional interactive client logic with Web Audio shutter sounds,
  * Imgur Cloud upload, tactile hold mechanics, and QR distribution.
  */
@@ -21,6 +21,8 @@ let lastTimestamp = performance.now();
 let captures = {};
 let isPredicting = false;
 let stream = null;
+let backendOnline = null; // null = not checked yet
+let hasLastResult = false; // true once a strip has been composed at least once this session
 
 // DOM Elements — Viewports & Feeds
 const videoFeed = document.getElementById("videoFeed");
@@ -46,6 +48,13 @@ const hudConfidence = document.getElementById("hudConfidence");
 
 const mirrorRefImg = document.getElementById("mirrorRefImg");
 const mirrorCaption = document.getElementById("mirrorCaption");
+
+// DOM Elements — Backend connection status + persistent header controls
+const backendStatusDot = document.getElementById("backendStatusDot");
+const backendStatusText = document.getElementById("backendStatusText");
+const backendStatusSpec = document.getElementById("backendStatusSpec");
+const btnHeaderRestart = document.getElementById("btnHeaderRestart");
+const btnViewLastResult = document.getElementById("btnViewLastResult");
 
 // DOM Elements — Result Dialog
 const resultModal = document.getElementById("resultModal");
@@ -158,6 +167,42 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add("show");
   setTimeout(() => toast.classList.remove("show"), 2400);
+}
+
+// Backend Connection Status
+// `online`: true only when we got ANY HTTP response (even a 4xx/5xx still proves the
+// server is reachable) -- false only when the request itself failed to complete
+// (fetch threw: connection refused, timeout, DNS/CORS failure, etc).
+function setBackendStatus(online, deviceLabel) {
+  const changed = online !== backendOnline;
+  backendOnline = online;
+
+  if (online) {
+    backendStatusDot.style.backgroundColor = "var(--google-green)";
+    backendStatusDot.style.boxShadow = "0 0 8px rgba(52, 168, 83, 0.7)";
+    backendStatusText.textContent = "BACKEND ONLINE";
+    if (deviceLabel) backendStatusSpec.textContent = deviceLabel.toUpperCase();
+  } else {
+    backendStatusDot.style.backgroundColor = "var(--google-red)";
+    backendStatusDot.style.boxShadow = "0 0 8px rgba(234, 67, 53, 0.7)";
+    backendStatusText.textContent = "BACKEND OFFLINE";
+    backendStatusSpec.textContent = "RETRYING...";
+    if (changed) showToast("⚠️ Mất kết nối với máy chủ. Đang thử kết nối lại...");
+  }
+}
+
+async function checkBackendHealth() {
+  try {
+    const resp = await fetch("/api/health", { cache: "no-store" });
+    if (resp.ok) {
+      const data = await resp.json();
+      setBackendStatus(true, data.device);
+    } else {
+      setBackendStatus(true); // reachable, just an unexpected status -- not "offline"
+    }
+  } catch (err) {
+    setBackendStatus(false);
+  }
 }
 
 // Camera Management
@@ -295,6 +340,7 @@ async function predictionLoop() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: frameData, threshold: 0.85, crop_aspect: true })
         });
+        setBackendStatus(true); // got a response at all -- server is reachable
 
         if (resp.ok) {
           const res = await resp.json();
@@ -302,6 +348,7 @@ async function predictionLoop() {
         }
       } catch (err) {
         console.error("Predict fetch error:", err);
+        setBackendStatus(false);
       } finally {
         isPredicting = false;
       }
@@ -378,6 +425,7 @@ async function onChallengeComplete() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+    setBackendStatus(true); // got a response at all -- server is reachable
 
     if (resp.ok) {
       const data = await resp.json();
@@ -417,6 +465,9 @@ async function onChallengeComplete() {
         correctLevel: QRCode.CorrectLevel.M
       });
 
+      hasLastResult = true;
+      btnViewLastResult.hidden = false;
+
       resultModal.classList.add("show");
       playSuccessFanfare();
       launchCelebration();
@@ -425,6 +476,8 @@ async function onChallengeComplete() {
     }
   } catch (err) {
     console.error("Compose error:", err);
+    setBackendStatus(false);
+    alert("Mất kết nối với máy chủ khi tạo ảnh. Vui lòng kiểm tra kết nối mạng và bấm nút \"Bắt đầu lại\" ở góc trên khi đã sẵn sàng thử lại.");
   }
 }
 
@@ -438,6 +491,14 @@ function restartChallenge() {
 
 btnCloseModal.addEventListener("click", () => resultModal.classList.remove("show"));
 btnRestartChallenge.addEventListener("click", restartChallenge);
+
+// Persistent header controls -- reachable regardless of modal/challenge state, so
+// closing the result modal (or getting stuck after the challenge completes) never
+// requires an F5 to recover from.
+btnHeaderRestart.addEventListener("click", restartChallenge);
+btnViewLastResult.addEventListener("click", () => {
+  if (hasLastResult) resultModal.classList.add("show");
+});
 
 // Copy link action
 btnCopyLink.addEventListener("click", async () => {
@@ -525,4 +586,10 @@ window.addEventListener("DOMContentLoaded", () => {
   updateTargetUI();
   initCameras();
   setTimeout(predictionLoop, 400);
+
+  // Backend connection status: check immediately, then keep polling as a heartbeat
+  // independent of the predict loop (so it still reports correctly even if the
+  // user is idle, mid-settings, or on the result modal -- not actively predicting).
+  checkBackendHealth();
+  setInterval(checkBackendHealth, 5000);
 });
