@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>GDG on Campus HUST — Photobooth Studio</title>
+  <title>GDG-HUST • Photobooth Studio</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,16 +23,16 @@
           <img src="/branding/gdg-logo.png" alt="GDG Logo" class="gdg-logo">
         </div>
         <div class="brand-titles">
-          <span class="brand-tag">GDG on Campus • HUST</span>
+          <span class="brand-tag">GDG-HUST</span>
           <h1 class="brand-name">Photobooth Studio</h1>
         </div>
       </div>
 
-      <!-- Live Broadcast Telemetry Indicator -->
+      <!-- Backend Connection Indicator (was static "LIVE VIEW" markup; now reflects real /api/health status) -->
       <div class="camera-status-pill">
-        <span class="rec-dot"></span>
-        <span class="rec-text">LIVE VIEW</span>
-        <span class="rec-spec">4:3 HD</span>
+        <span class="rec-dot" id="backendStatusDot"></span>
+        <span class="rec-text" id="backendStatusText">ĐANG KẾT NỐI...</span>
+        <span class="rec-spec" id="backendStatusSpec">--</span>
       </div>
 
       <!-- Controls -->
@@ -54,6 +54,14 @@
             <option value="">Đang tìm camera...</option>
           </select>
         </div>
+
+        <button id="btnViewLastResult" class="icon-button" title="Xem lại ảnh vừa chụp" aria-label="View last result" hidden>
+          <span class="material-symbols-rounded">photo_library</span>
+        </button>
+
+        <button id="btnHeaderRestart" class="icon-button" title="Bắt đầu lại" aria-label="Restart challenge">
+          <span class="material-symbols-rounded">restart_alt</span>
+        </button>
 
         <button id="btnOpenSettings" class="icon-button" title="Cài đặt Imgur & Photobooth" aria-label="Settings">
           <span class="material-symbols-rounded">tune</span>
@@ -219,7 +227,7 @@
               <div class="ticket-header">
                 <div class="ticket-brand-group">
                   <img src="/branding/gdg-logo.png" alt="GDG Logo" class="ticket-logo">
-                  <span class="ticket-brand">GDG ON CAMPUS HUST</span>
+                  <span class="ticket-brand">GDG-HUST</span>
                 </div>
                 <span class="ticket-tag" id="cloudBadgeText">Cloud Ready</span>
               </div>
