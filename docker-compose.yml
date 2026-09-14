@@ -10,7 +10,10 @@ services:
     volumes:
       - ./app:/app/app
       - ./output:/app/output
-      - ~/.cache/huggingface:/root/.cache/huggingface
+      # NOTE: no ~/.cache/huggingface mount -- the model is now baked into the
+      # image at build time (see Dockerfile). Mounting the host's cache here
+      # would SHADOW that baked-in copy with an empty directory on any laptop
+      # that doesn't already have it populated, defeating the point.
     environment:
       - PYTHONUNBUFFERED=1
       - IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID:-}
