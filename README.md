@@ -15,7 +15,7 @@ CNNs trained from scratch -- see [Architecture](#architecture) for why the
 emotion stage in particular ended up as a pretrained model rather than a
 from-scratch landmark classifier.
 
-## Setup
+## 1. Setup
 
 ```bash
 python3 -m venv .venv
@@ -30,7 +30,7 @@ on a machine with unreliable internet -- see the note in
 [Retraining the hand-gesture model](#retraining-the-hand-gesture-model) for
 copying that cache to another machine instead of re-downloading.
 
-## Directory layout
+## 2. Directory layout
 
 ```
 fer-2013/train/<emotion>/*.jpg    FER-2013 dataset (7 emotion classes)
@@ -42,11 +42,14 @@ features/                         Extracted landmark vectors (.npz) -- generated
 checkpoints/                      Trained model weights (.pt) -- generated
 pipeline/                         Core library: preprocessing, models, training, inference
 demo/                             Local-only test/demo tools built on top of pipeline/
+demo/assets/frame.png             Designed photobooth frame, composited by demo/frame_compositor.py
+app/                              Web app: FastAPI backend (main.py) + browser frontend (static/)
+output/                           Web app's saved sessions/strips (gitignored) -- separate from demo/output/
 ```
 
-## Scripts
+## 3. Scripts
 
-### Root
+### 3.1. Root
 
 **`collect_gesture_data.py`**
 Webcam data-collection tool for building `dataset/<label>/`. Runs
@@ -60,7 +63,7 @@ python collect_gesture_data.py --label gdg --output-dir dataset --max-hands 2
 python collect_gesture_data.py --label noise --output-dir dataset
 ```
 
-### `pipeline/` -- core library
+### 3.2. `pipeline/` -- core library
 
 This is the part meant to ship as-is to a backend later; nothing here should
 be edited for local-testing purposes (see `demo/` instead).
@@ -84,7 +87,7 @@ There's no such problem for the 2-class gesture task: "gdg" is a
 well-separated hand shape, and the from-scratch `GestureClassifier` MLP
 reaches ~99% validation accuracy on it, so there was no reason to swap it out.
 
-### `demo/` -- local-testing-only tools
+### 3.3. `demo/` -- local-testing-only tools
 
 Not part of the shippable pipeline. Both scripts import `GestureEmotionPipeline`
 the way an external consumer would (plain library import, nothing in
@@ -115,7 +118,32 @@ player photo | reference photo) plus the 4 individual captures to
 python demo/photobooth_challenge.py --hold-seconds 1.0 --panel-size 480
 ```
 
-## Architecture
+**`frame_compositor.py`**
+Composites 4 player captures + 4 reference photos into the designed
+`demo/assets/frame.png` strip -- photos are placed on a blank canvas first,
+then the frame (with its alpha channel) is drawn on top, so the frame's
+decorative elements correctly overlap the photo edges instead of being hidden
+underneath them. `build_framed_strip(captures, references)` is the reusable
+function; it's what `app/main.py`'s `/api/challenge/compose` endpoint calls.
+Slot coordinates for a replacement frame can be re-measured directly from its
+alpha channel with `--detect-slots`, rather than hand-measured.
+
+```bash
+python demo/frame_compositor.py --session-dir demo/output/session_<timestamp>
+python demo/frame_compositor.py --detect-slots   # after replacing frame.png
+```
+
+### 3.4. `app/` -- web application
+
+A FastAPI backend (`main.py`) wrapping the same `GestureEmotionPipeline` used
+everywhere else in this repo, serving a browser frontend (`static/`) that
+implements the same challenge flow as `demo/photobooth_challenge.py` -- camera
+capture happens in the browser (`getUserMedia`), the backend never touches a
+camera directly. See [Running the web app](#running-the-web-app) below for how
+to launch it, and [INTEGRATION.md](INTEGRATION.md) for the API surface if
+you're building against it rather than running it as-is.
+
+## 4. Architecture
 
 ```
                      ┌──────────────────────┐
@@ -145,7 +173,101 @@ python demo/photobooth_challenge.py --hold-seconds 1.0 --panel-size 480
                           predicted emotion
 ```
 
-## Retraining the hand-gesture model
+## 5. Running the web app
+
+Two ways to set up `app/`, depending on how many machines you're deploying to
+and whether you want Docker's isolation or a lighter native install.
+
+### 5.1. Docker
+
+```bash
+docker compose up --build -d
+```
+Open `http://localhost:8000`. The image bakes the ViT weights in at build
+time (`download_models.py` runs during the build), so a running container
+never needs internet access or a host's Hugging Face cache.
+
+**The first build is slow and network-heavy -- budget real time for it.**
+In testing, the `pip install -r requirements-docker.txt` step alone (mediapipe
++ torch + transformers + opencv) took 20-36 minutes depending on connection
+quality, and the final image is **~8GB**. This is inherent to those
+dependencies, not something `--build` can speed up. **Do this once, not per
+machine** -- see "Distributing to multiple laptops" below.
+
+```bash
+docker compose logs -f       # tail logs
+docker compose restart       # picks up changes under app/ (bind-mounted) -- no rebuild needed
+docker compose build         # rebuild -- required for changes outside app/ (pipeline/, demo/,
+                              # requirements-docker.txt, Dockerfile itself)
+docker compose down          # stop and remove the container
+```
+Optional: set `IMGUR_CLIENT_ID` in your shell (or a `.env` file next to
+`docker-compose.yml`) before `up` to enable Imgur uploads -- omit it and the
+app falls back to an anonymous CDN, then a local LAN URL.
+
+### 5.2. Manual (no Docker)
+
+```bash
+.venv/bin/pip install "fastapi>=0.110.0" "uvicorn[standard]>=0.28.0" \
+  "python-multipart>=0.0.9" "pydantic>=2.0.0"
+.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+This assumes the ML dependencies are already installed via the root
+[Setup](#setup) (`requirements.txt`) -- use that file, not
+`requirements-docker.txt`, for a native install. `requirements-docker.txt`
+deliberately pins `mediapipe==0.10.18` (not `0.10.21`, which doesn't have a
+`linux/arm64` wheel and would fail the Docker build outright) and skips
+`torch`/`torchvision` (installed as a separate step from PyTorch's own CPU
+index) -- neither restriction applies outside Docker.
+
+### 5.3. Accessing from another device on the same network
+
+Both paths serve on `0.0.0.0:8000`, so a phone/tablet/other laptop on the same
+wifi can open `http://<host-laptop-LAN-IP>:8000`. If the browser refuses
+camera access over plain HTTP on a non-`localhost` address, allow it via
+`chrome://flags/#unsafely-treat-insecure-origin-as-secure` (add
+`http://<that-IP>:8000`) -- camera access requires a secure context, and
+`localhost` gets one for free but a LAN IP doesn't.
+
+### 5.4. Distributing to multiple laptops (e.g. a club fest with several PICs)
+
+Whichever path you pick, **never repeat the slow dependency install live, on
+each laptop, at the venue.** Build or download once, distribute the result,
+and let each laptop's setup be offline and fast:
+
+- **Docker**: build once, `docker save gdg-photobooth:latest -o gdg-photobooth.tar`
+  (~8GB), copy it to each laptop (USB / shared drive), `docker load -i
+  gdg-photobooth.tar` there -- fully offline from that point on. For a larger
+  or recurring fleet, push to a registry instead (e.g. GitHub Container
+  Registry, `ghcr.io/<org>/<repo>`) so each laptop just does `docker pull`
+  ahead of time, on good wifi, days before the event. If the fleet mixes
+  Windows (`amd64`) and Apple Silicon Mac (`arm64`) laptops, build with
+  `docker buildx build --platform linux/amd64,linux/arm64 --push` so one pull
+  automatically gets the right variant per machine -- a plain `docker build`
+  only targets the machine you build on (this repo's images have so far only
+  been built for `arm64`; a Windows laptop needs an `amd64` build first).
+
+- **Manual (recommended for a small, known set of laptops)**: build a "wheelhouse"
+  once per distinct OS/CPU in the fleet -- no installation happens yet, just
+  downloading the files:
+  ```bash
+  pip download --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple \
+    --platform win_amd64 --python-version 310 --only-binary=:all: \
+    -d wheelhouse-win torch torchvision -r requirements.txt
+  ```
+  (swap `--platform` for `macosx_11_0_arm64` / `macosx_10_9_x86_64` on Mac).
+  Copy the resulting folder + this repo to each matching laptop, then there,
+  with no network involved at all:
+  ```bash
+  python -m venv .venv
+  .venv/bin/pip install --no-index --find-links=wheelhouse-win -r requirements.txt
+  ```
+  Each laptop builds its own venv locally (avoiding the broken-symlink risk of
+  copying a `.venv` folder wholesale across machines), from a payload a few GB
+  smaller than the Docker image, with no Docker Desktop install required on
+  any target machine.
+
+## 6. Retraining the hand-gesture model
 
 The gesture model is the one you'll retrain most often -- e.g. after
 collecting more `dataset/gdg` or `dataset/noise` images to fix a

@@ -3,6 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # Pinned explicitly -- without this, compose derives the image name from
+    # the checkout directory's name (e.g. "gdg_hust-photobooth-photobooth"),
+    # which silently changes if anyone clones this repo into a differently
+    # named folder. That would break any `docker save`/`docker pull` command
+    # written against a fixed name (see README's distribution instructions).
+    image: gdg-photobooth:latest
     container_name: gdg-photobooth
     restart: unless-stopped
     ports:
