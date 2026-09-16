@@ -16,15 +16,15 @@ Requires **Python 3.10**.
 python3.10 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 **Windows (PowerShell / Command Prompt):**
-```dos
+```powershell
 py -3.10 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Open `http://localhost:8000`. First run downloads the `trpakov/vit-face-expression` ViT weights (~336MB) from Hugging Face (needs internet once, then it's cached under `~/.cache/huggingface/hub/`).
