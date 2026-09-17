@@ -7,13 +7,14 @@ Cascade inference for the hierarchical gesture/emotion pipeline:
   2. Run the (landmark-based) GestureClassifier on the two-hand vector, but
      ONLY if Holistic found at least one hand -- a frame with zero hands is
      categorically not "gdg", and we never even ask the model in that case.
-     Otherwise, two more checks gate the model's own P(gdg) before it's
-     trusted: (a) a hard distance override -- hands too far apart to
-     physically form "< >" are rejected regardless of model confidence, since
-     the model was empirically found not to reliably use that signal on its
-     own (see MAX_PLAUSIBLE_GDG_DISTANCE below); (b) P(gdg) > gesture_threshold
-     (default 0.85). Passing both -> report "gdg" immediately, skipping the
-     emotion model entirely.
+     Otherwise, trust the model's own P(gdg) directly: P(gdg) > gesture_threshold
+     (default 0.85) -> report "gdg" immediately, skipping the emotion model
+     entirely. (An earlier version also hard-rejected based on the two
+     inter-hand distance features -- landmark_utils.extract_two_hand_vector's
+     distance1/distance2 -- when they exceeded a fixed threshold. Removed: in
+     practice it produced false rejections on genuine gdg attempts. Those two
+     features are still part of the model's input and still influence P(gdg)
+     through its learned weights, just no longer as a separate hard override.)
   3. Otherwise, fall back to the pretrained ViT emotion classifier
      (pretrained_emotion.PretrainedEmotionClassifier) on a face crop derived
      from Holistic's face landmarks, and report the predicted emotion -- or
@@ -39,17 +40,6 @@ from models import GestureClassifier
 from pretrained_emotion import PretrainedEmotionClassifier, face_bbox_from_landmarks
 
 DEFAULT_GESTURE_THRESHOLD = 0.85
-
-# "gdg" requires two hands close enough together to form the "< >" shape. Real gdg
-# training examples never exceeded distance1=1.34 (index-tip separation, in units of
-# finger length -- see landmark_utils.compute_inter_hand_distances); noise examples
-# range up to ~10. This is enforced as a hard, deterministic override rather than left
-# to the model to learn, because it was empirically found NOT to reliably use these two
-# features on its own: an ablation holding a real gdg vector's shape features fixed and
-# sweeping just distance1/distance2 from 0.9 up to the 99.0 missing-hand sentinel moved
-# P(gdg) by under half a percentage point. T=1.5 gives a safety margin above the
-# observed real-gdg max while still catching most far-apart cases outright.
-MAX_PLAUSIBLE_GDG_DISTANCE = 1.5
 
 
 def get_device() -> torch.device:
@@ -135,13 +125,6 @@ class GestureEmotionPipeline:
             )
             hand_t = torch.from_numpy(hand_vec).float().unsqueeze(0).to(self.device)
             gesture_prob = torch.sigmoid(self.gesture_model(hand_t)).item()
-
-            # Hard override: hands too far apart to physically form "< >" -- reject
-            # regardless of model confidence. hand_vec[126:128] are (distance1,
-            # distance2); see MAX_PLAUSIBLE_GDG_DISTANCE above and
-            # landmark_utils.extract_two_hand_vector for the vector layout.
-            if hand_vec[126] > MAX_PLAUSIBLE_GDG_DISTANCE or hand_vec[127] > MAX_PLAUSIBLE_GDG_DISTANCE:
-                gesture_prob = 0.0
 
         if gesture_prob > gesture_threshold:
             return {"label": "gdg", "stage": "gesture", "confidence": gesture_prob}

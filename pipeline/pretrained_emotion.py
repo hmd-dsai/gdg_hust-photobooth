@@ -61,13 +61,22 @@ class PretrainedEmotionClassifier:
 
     @torch.no_grad()
     def predict(self, face_rgb: np.ndarray) -> dict:
-        """`face_rgb`: an (H, W, 3) RGB uint8 crop containing just the face."""
+        """
+        `face_rgb`: an (H, W, 3) RGB uint8 crop containing just the face.
+        `probs` is the full 7-class distribution (already computed for the
+        argmax anyway, so returning it costs nothing extra) -- useful for
+        anything that wants to show/inspect the full call, not just the winner.
+        """
         image = Image.fromarray(face_rgb)
         inputs = self.processor(images=image, return_tensors="pt").to(self.device)
         logits = self.model(**inputs).logits
         probs = torch.softmax(logits, dim=-1).squeeze(0)
         pred_id = int(probs.argmax().item())
-        return {"label": self.id2label[pred_id], "confidence": probs[pred_id].item()}
+        return {
+            "label": self.id2label[pred_id],
+            "confidence": probs[pred_id].item(),
+            "probs": {self.id2label[i]: probs[i].item() for i in range(len(probs))},
+        }
 
 
 def face_bbox_from_landmarks(face_landmarks, frame_shape, margin: float = 0.25):
