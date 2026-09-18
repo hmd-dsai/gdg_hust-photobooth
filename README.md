@@ -180,3 +180,16 @@ python demo/frame_compositor.py --detect-slots   # after replacing frame.png
 ### 5.4. `app/` -- web application
 
 A FastAPI backend (`main.py`) wrapping the same `GestureEmotionPipeline` used everywhere else in this repo, serving a browser frontend (`static/`) that implements the same challenge flow as `demo/photobooth_challenge.py` -- camera capture happens in the browser (`getUserMedia`), the backend never touches a camera directly. See [Setup](#setup) above for how to launch it, and [INTEGRATION.md](INTEGRATION.md) for the API surface if you're building against it rather than running it as-is.
+
+## 6. Future features
+
+- [ ] Add START button before starting webcam and inference
+- [ ] Use better emotion detector ViT (currently it's easy to do happy and surprised, hard to do angry, and nearly impossible to do any other emotions)
+- [ ] Use more meme reference images, and randomize them
+- [ ] Train more hand gestures, maybe hand + face as well (eg. mewing, so I need to reintroduce face mesh)
+- [ ] Collect hand gestures data from more people
+- [ ] Deal with >= 2 people taking photos (current behavior is unknown to users)
+- [ ] Improve output image resolution
+- [ ] Add boomerang/GIF output like in real photobooth
+- [ ] Use a better web to upload temp output photots (tmpfiles.org has a fake download button)
+- [ ] The gigantic PyTorch is installed only for MLP, so migrate to NumPy
