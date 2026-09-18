@@ -390,23 +390,31 @@ function handlePredictionResult(res, dt, currentFrameData) {
     holdHint.textContent = `Giữ thêm ${remaining}s...`;
 
     if (holdElapsed >= targetDuration) {
-      // Step complete!
-      triggerFlash();
-      captures[currentTarget] = currentFrameData;
-      holdElapsed = 0;
-      currentStepIdx++;
-
-      if (currentStepIdx < GESTURE_SEQUENCE.length) {
-        updateTargetUI();
-      } else {
-        onChallengeComplete();
-      }
+      completeStep(currentFrameData);
     }
   } else {
     holdElapsed = 0;
     holdProgressBar.style.width = "0%";
     holdProgressBar.style.backgroundColor = "var(--google-blue)";
     holdHint.textContent = `Tạo biểu cảm: ${currentTarget.toUpperCase()}`;
+  }
+}
+
+// Marks the current challenge step as captured with `frameData` and advances
+// to the next one (or finishes the challenge). Shared by the normal
+// hold-for-N-seconds path above and the hidden manual-capture shortcut below,
+// so both end up going through the exact same completion logic.
+function completeStep(frameData) {
+  const currentTarget = GESTURE_SEQUENCE[currentStepIdx];
+  triggerFlash();
+  captures[currentTarget] = frameData;
+  holdElapsed = 0;
+  currentStepIdx++;
+
+  if (currentStepIdx < GESTURE_SEQUENCE.length) {
+    updateTargetUI();
+  } else {
+    onChallengeComplete();
   }
 }
 
@@ -498,6 +506,36 @@ btnRestartChallenge.addEventListener("click", restartChallenge);
 btnHeaderRestart.addEventListener("click", restartChallenge);
 btnViewLastResult.addEventListener("click", () => {
   if (hasLastResult) resultModal.classList.add("show");
+});
+
+// Hidden manual-capture override -- intentionally not surfaced anywhere in the
+// UI (no button, no hint, no settings entry). Some target expressions (e.g.
+// "angry") are hard to get the model to recognize confidently on demand;
+// pressing 'c' captures the current frame for whatever step is active right
+// now, skipping the hold-for-N-seconds requirement entirely. Goes through the
+// exact same completeStep() as a normal capture, so the rest of the flow
+// (flash, sound, strip composition) behaves identically either way.
+document.addEventListener("keydown", (e) => {
+  if (e.repeat) return; // ignore OS key-repeat -- each press should complete at most one step
+  if (e.key.toLowerCase() !== "c") return;
+
+  // Diagnostic logging (console only, not UI) -- if 'c' does nothing visible,
+  // open DevTools console and press it again: this prints exactly which
+  // guard blocked it, if any.
+  if (currentMode !== "challenge") { console.log("[c-capture] blocked: not in challenge mode"); return; }
+  if (currentStepIdx >= GESTURE_SEQUENCE.length) { console.log("[c-capture] blocked: challenge already complete"); return; }
+  if (settingsModal.classList.contains("show") || resultModal.classList.contains("show")) {
+    console.log("[c-capture] blocked: a modal is open"); return;
+  }
+  const activeTag = (document.activeElement && document.activeElement.tagName) || "";
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(activeTag)) {
+    console.log("[c-capture] blocked: focus is in a", activeTag); return;
+  }
+
+  const frameData = grabCurrentFrame(true);
+  if (!frameData) { console.log("[c-capture] blocked: grabCurrentFrame() returned nothing (video not ready?)"); return; }
+  console.log("[c-capture] firing for step", GESTURE_SEQUENCE[currentStepIdx]);
+  completeStep(frameData);
 });
 
 // Copy link action
