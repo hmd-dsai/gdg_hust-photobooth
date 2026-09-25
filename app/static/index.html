@@ -59,6 +59,10 @@
           <span class="material-symbols-rounded">photo_library</span>
         </button>
 
+        <button id="btnPauseResume" class="icon-button" title="Tạm dừng (tiết kiệm pin)" aria-label="Pause camera and inference">
+          <span class="material-symbols-rounded">pause</span>
+        </button>
+
         <button id="btnHeaderRestart" class="icon-button" title="Bắt đầu lại" aria-label="Restart challenge">
           <span class="material-symbols-rounded">restart_alt</span>
         </button>
@@ -194,6 +198,18 @@
           </div>
         </div>
       </section>
+
+      <!-- Battery-saver Paused Overlay: covers whichever section (challenge/mirror) is
+           active. Shown/hidden purely via the "show" class from app.js. -->
+      <div id="pausedOverlay" class="paused-overlay">
+        <span class="material-symbols-rounded paused-icon">pause_circle</span>
+        <h2>Đã tạm dừng</h2>
+        <p>Camera đã tắt để tiết kiệm pin.</p>
+        <button id="btnResumeFromOverlay" class="cta-button primary">
+          <span class="material-symbols-rounded">play_arrow</span>
+          <span>Tiếp tục</span>
+        </button>
+      </div>
     </main>
 
     <!-- Modal: Studio Photostrip & QR Handout -->
