@@ -210,7 +210,7 @@ def upload_to_cloud(image_path: str, custom_imgur_id: Optional[str] = None) -> T
     """
     Multi-tier image upload:
     Tier 1: Imgur API (if client_id is passed or in IMGUR_CLIENT_ID env)
-    Tier 2: High-speed anonymous temporary CDN (tmpfiles.org)
+    Tier 2: Anonymous temporary CDN (temp.sh)
     Tier 3: Local LAN network URL
     Returns (url, provider_name: 'imgur' | 'cdn' | 'local')
     """
@@ -221,7 +221,14 @@ def upload_to_cloud(image_path: str, custom_imgur_id: Optional[str] = None) -> T
         if imgur_link:
             return imgur_link, "imgur"
 
-    # 2. Fast anonymous CDN fallback (tmpfiles.org)
+    # 2. Anonymous CDN fallback (temp.sh). NOTE: unlike tmpfile.link, the URL
+    # temp.sh returns is NOT a direct-download link on a plain GET -- it's an
+    # HTML landing page with a "Click here to download" button (only a POST
+    # to that same URL returns the raw file). Being tried anyway at the
+    # user's explicit request, to compare upload latency firsthand before
+    # deciding on a provider -- see the module's git history / conversation
+    # for the measured tradeoffs (tmpfile.link: ~5-24s, temp.sh: ~12s in
+    # testing, neither reliably fast on venue wifi).
     try:
         import urllib.request
         boundary = "----WebKitFormBoundaryPhotoboothUpload7MA4"
@@ -236,18 +243,20 @@ def upload_to_cloud(image_path: str, custom_imgur_id: Optional[str] = None) -> T
         ).encode("utf-8") + file_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
 
         req = urllib.request.Request(
-            "https://tmpfiles.org/api/v1/upload",
+            "https://temp.sh/upload",
             data=body,
             headers={
                 "Content-Type": f"multipart/form-data; boundary={boundary}",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }
         )
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            if data.get("status") == "success":
-                raw_url = data["data"]["url"]
-                direct_url = raw_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+        # Same reasoning as before: a real photostrip took well over 8s in
+        # testing, so give it real headroom rather than silently falling back.
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            # temp.sh's response body is plain text containing just the URL
+            # (not JSON, unlike tmpfile.link/tmpfiles.org).
+            direct_url = resp.read().decode("utf-8").strip()
+            if direct_url.startswith("http"):
                 print(f"[Cloud Upload Success] Fallback CDN: {direct_url}")
                 return direct_url, "cdn"
     except Exception as e:
