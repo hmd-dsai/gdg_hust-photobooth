@@ -11,15 +11,11 @@ uses, and it's deliberate -- the frame has decorative elements meant to
 overlap the photo edges (border, shadow, corner accents), and those only look
 right sitting above the photos, not hidden underneath them.
 
-Slot coordinates were NOT taken from the original manual estimate as-is --
-they were measured directly from the frame's own alpha channel (the
-transparent "windows" are ground truth) via connected-component analysis.
-That caught 3 typos in the manual estimate: the right edge of the label-image
-column in rows 2-4 was given as x=992, which would have been visibly
-non-square and misaligned with the frame art; the actual window edge is at
-x=922 (matching row 1). See SLOTS below for the corrected, verified values --
-re-run the `if __name__ == "__main__"` block's --detect-slots flag if the
-frame is ever redesigned/replaced, rather than hand-editing coordinates again.
+Slot coordinates are NOT hand-estimated -- they're measured directly from the
+frame's own alpha channel (the transparent "windows" are ground truth) via
+connected-component analysis, using this file's own --detect-slots flag.
+Re-run it and paste the result into SLOTS below any time frame.png is
+redesigned/replaced, rather than hand-editing coordinates.
 
 Usage:
     # Build a strip from a photobooth_challenge.py session directory:
@@ -48,10 +44,10 @@ GESTURE_SEQUENCE = ["happy", "angry", "surprise", "gdg"]  # row order, top to bo
 # (x1, y1, x2, y2) in frame.png's own pixel space, verified against the frame's
 # alpha channel -- see module docstring.
 SLOTS = {
-    "happy":    {"capture": (158, 361, 555, 659),   "reference": (625, 361, 923, 658)},
-    "angry":    {"capture": (158, 708, 555, 1005),  "reference": (625, 708, 922, 1005)},
-    "surprise": {"capture": (158, 1042, 555, 1340), "reference": (625, 1042, 922, 1339)},
-    "gdg":      {"capture": (158, 1375, 555, 1673), "reference": (625, 1375, 922, 1673)},
+    "happy":    {"capture": (153, 392, 550, 689),   "reference": (620, 392, 918, 689)},
+    "angry":    {"capture": (153, 739, 550, 1036),  "reference": (620, 739, 917, 1036)},
+    "surprise": {"capture": (148, 1073, 550, 1370), "reference": (620, 1073, 917, 1370)},
+    "gdg":      {"capture": (153, 1406, 550, 1704), "reference": (620, 1406, 917, 1704)},
 }
 
 
