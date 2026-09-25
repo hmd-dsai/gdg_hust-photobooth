@@ -23,6 +23,7 @@ let isPredicting = false;
 let stream = null;
 let backendOnline = null; // null = not checked yet
 let hasLastResult = false; // true once a strip has been composed at least once this session
+let isPaused = false; // battery saver: camera released + /api/predict polling halted
 
 // DOM Elements — Viewports & Feeds
 const videoFeed = document.getElementById("videoFeed");
@@ -55,6 +56,9 @@ const backendStatusText = document.getElementById("backendStatusText");
 const backendStatusSpec = document.getElementById("backendStatusSpec");
 const btnHeaderRestart = document.getElementById("btnHeaderRestart");
 const btnViewLastResult = document.getElementById("btnViewLastResult");
+const btnPauseResume = document.getElementById("btnPauseResume");
+const pausedOverlay = document.getElementById("pausedOverlay");
+const btnResumeFromOverlay = document.getElementById("btnResumeFromOverlay");
 
 // DOM Elements — Result Dialog
 const resultModal = document.getElementById("resultModal");
@@ -252,8 +256,53 @@ async function startCameraStream(deviceId) {
 }
 
 cameraSelect.addEventListener("change", (e) => {
+  // While paused there's no live stream to switch -- the choice is just
+  // remembered (cameraSelect.value) and picked up by startCameraStream()
+  // when the user resumes, so we don't re-acquire the camera early.
+  if (isPaused) return;
   startCameraStream(e.target.value);
 });
+
+// Battery Saver: Pause / Resume
+// Stops the two things that actually draw power/CPU for a display running all
+// day: the webcam hardware (stream tracks) and the ~5.5 FPS /api/predict
+// polling loop (which drives a real model inference on the server each time).
+// Everything else (UI, backend health heartbeat) keeps running so the app
+// still looks alive and reconnects cleanly.
+function setPaused(paused) {
+  isPaused = paused;
+
+  if (paused) {
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    videoFeed.srcObject = null;
+    mirrorVideoFeed.srcObject = null;
+
+    hudLiveLabel.textContent = "PAUSED";
+    hudConfidence.textContent = "--%";
+    mirrorCaption.textContent = "Đã tạm dừng";
+
+    btnPauseResume.querySelector(".material-symbols-rounded").textContent = "play_arrow";
+    btnPauseResume.title = "Tiếp tục";
+    btnPauseResume.classList.add("is-paused-state");
+    pausedOverlay.classList.add("show");
+  } else {
+    btnPauseResume.querySelector(".material-symbols-rounded").textContent = "pause";
+    btnPauseResume.title = "Tạm dừng (tiết kiệm pin)";
+    btnPauseResume.classList.remove("is-paused-state");
+    pausedOverlay.classList.remove("show");
+
+    // Avoid feeding a huge dt (elapsed-while-paused) into the hold-progress
+    // math on the very next prediction tick.
+    lastTimestamp = performance.now();
+    startCameraStream(cameraSelect.value || undefined);
+  }
+}
+
+btnPauseResume.addEventListener("click", () => setPaused(!isPaused));
+btnResumeFromOverlay.addEventListener("click", () => setPaused(false));
 
 // Mode Switcher
 btnChallengeMode.addEventListener("click", () => {
@@ -325,6 +374,11 @@ function grabCurrentFrame(flipHorizontal = true) {
 
 // Prediction Loop
 async function predictionLoop() {
+  if (isPaused) {
+    setTimeout(predictionLoop, PREDICT_INTERVAL_MS);
+    return;
+  }
+
   const now = performance.now();
   const dt = now - lastTimestamp;
   lastTimestamp = now;
@@ -518,6 +572,7 @@ btnViewLastResult.addEventListener("click", () => {
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return; // ignore OS key-repeat -- each press should complete at most one step
   if (e.key.toLowerCase() !== "c") return;
+  if (isPaused) { console.log("[c-capture] blocked: paused"); return; }
 
   // Diagnostic logging (console only, not UI) -- if 'c' does nothing visible,
   // open DevTools console and press it again: this prints exactly which
