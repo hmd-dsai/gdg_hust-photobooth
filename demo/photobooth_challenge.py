@@ -126,7 +126,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--camera", type=int, default=0)
     p.add_argument("--checkpoints-dir", default=os.path.join(PROJECT_ROOT, "checkpoints"))
     p.add_argument("--features-dir", default=os.path.join(PROJECT_ROOT, "features"))
-    p.add_argument("--labeled-dir", default=os.path.join(PROJECT_ROOT, "labeled"))
+    p.add_argument("--reference-dir", default=os.path.join(PROJECT_ROOT, "reference_photos"))
     p.add_argument("--output-dir", default=os.path.join(os.path.dirname(__file__), "output"))
     p.add_argument("--panel-size", type=int, default=480)
     p.add_argument("--hold-seconds", type=float, default=HOLD_SECONDS_DEFAULT)
@@ -137,8 +137,8 @@ def parse_args() -> argparse.Namespace:
 def main():
     args = parse_args()
 
-    print(f"Loading reference panels from {args.labeled_dir} ...")
-    panels = load_reference_panels(args.labeled_dir, args.panel_size)
+    print(f"Loading reference panels from {args.reference_dir} ...")
+    panels = load_reference_panels(args.reference_dir, args.panel_size)
     missing = [g for g in GESTURE_SEQUENCE if g not in panels]
     if missing:
         raise RuntimeError(f"Missing reference images for: {missing}")

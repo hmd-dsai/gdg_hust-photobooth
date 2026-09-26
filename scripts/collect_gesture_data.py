@@ -11,9 +11,9 @@ frames at a fixed interval while at least one hand is visible. Press 'q'
 to quit.
 
 Usage:
-    python collect_gesture_data.py --label thumbs_up --output-dir dataset
-    python collect_gesture_data.py -l peace -o dataset --camera 0
-    python collect_gesture_data.py -l wave -o dataset --interval 0.1
+    python collect_gesture_data.py --label thumbs_up --output-dir data/gesture
+    python collect_gesture_data.py -l peace -o data/gesture --camera 0
+    python collect_gesture_data.py -l wave -o data/gesture --interval 0.1
 """
 
 import argparse
@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-o", "--output-dir",
         type=str,
-        default="dataset",
+        default="data/gesture",
         help="Root directory where captured images are saved.",
     )
     parser.add_argument(

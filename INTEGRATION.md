@@ -73,7 +73,7 @@ target continuously, act once it holds).
 ## Building new features on top
 
 - **New gesture classes**: retrain `GestureClassifier` (README's "Retraining
-  the hand-gesture model") after adding a new `dataset/<label>/` folder --
+  the hand-gesture model") after adding a new `data/gesture/<label>/` folder --
   `GESTURE_CLASS_ORDER` in `preprocess.py` is the only place class identity
   is defined.
 - **Different emotion set / better accuracy**: swap `pretrained_emotion.py`'s
