@@ -7,15 +7,15 @@ Runs MediaPipe Holistic ONCE per image and independently populates two
 datasets from whichever landmarks Holistic actually finds:
 
   - FACE dataset (468 landmarks -> 1404-d vector), from
-        fer-2013/<split>/<emotion>/*.jpg
+        data/fer-2013/<split>/<emotion>/*.jpg
     A face-less image is skipped (logged), since a supervised emotion
     classifier needs a real face signal -- there's nothing meaningful to
     zero-pad here.
 
   - HAND dataset (21 landmarks x 2 hands + 2 inter-hand distance features ->
     128-d vector, zero-padded), from
-        dataset/gdg/*.jpg    (label 1, "gdg")
-        dataset/noise/*.jpg  (label 0, background)
+        data/gesture/gdg/*.jpg    (label 1, "gdg")
+        data/gesture/noise/*.jpg  (label 0, background)
     A missing hand is zero-padded, NOT discarded -- both classes legitimately
     contain frames with zero, one, or two hands visible, and the two
     per-image outputs (face vs. hand) are populated independently, so a
@@ -25,11 +25,11 @@ datasets from whichever landmarks Holistic actually finds:
 
 Usage:
     python preprocess.py \
-        --fer-root ../fer-2013 --gesture-root ../dataset --output-dir ../features
+        --fer-root ../data/fer-2013 --gesture-root ../data/gesture --output-dir ../features
 
     # Re-extract only the (fast, ~1-2 min) hand/gesture dataset, e.g. after
-    # collecting more dataset/gdg or dataset/noise images -- skips the slow
-    # (~20 min) FER-2013 face pass entirely:
+    # collecting more data/gesture/gdg or data/gesture/noise images -- skips
+    # the slow (~20 min) FER-2013 face pass entirely:
     python preprocess.py --only hand
 """
 
@@ -52,8 +52,8 @@ GESTURE_CLASS_ORDER = ["noise", "gdg"]  # index 0 = background/negative, 1 = gdg
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Extract MediaPipe Holistic landmark features.")
-    p.add_argument("--fer-root", default="fer-2013", help="Root of the FER-2013 image tree (train/, test/).")
-    p.add_argument("--gesture-root", default="dataset", help="Root containing gdg/ and noise/ image folders.")
+    p.add_argument("--fer-root", default="data/fer-2013", help="Root of the FER-2013 image tree (train/, test/).")
+    p.add_argument("--gesture-root", default="data/gesture", help="Root containing gdg/ and noise/ image folders.")
     p.add_argument("--output-dir", default="features", help="Where to write the .npz feature files.")
     p.add_argument(
         "--upscale", type=int, default=256,
@@ -67,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--only", choices=["all", "face", "hand"], default="all",
         help="Which dataset(s) to (re-)extract. 'hand' skips the slow FER-2013 face pass "
-             "entirely -- use it when you've only added/changed dataset/gdg or dataset/noise images.",
+             "entirely -- use it when you've only added/changed data/gesture/gdg or data/gesture/noise images.",
     )
     return p.parse_args()
 
@@ -170,7 +170,7 @@ def main():
                 np.savez_compressed(out_path, X=X, y=y)
                 print(f"  saved -> {out_path}  X={X.shape} y={y.shape}")
 
-        # ---- Hand / gesture dataset, from dataset/gdg + dataset/noise ----
+        # ---- Hand / gesture dataset, from data/gesture/gdg + data/gesture/noise ----
         if args.only in ("all", "hand"):
             print(f"Extracting HAND features: {args.gesture_root}")
             X, y = extract_split(holistic, args.gesture_root, GESTURE_CLASS_ORDER, "hand", args, mode="hand")

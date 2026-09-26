@@ -29,7 +29,7 @@ RUN pip install --no-cache-dir -r requirements-docker.txt
 # no reliance on a host machine's ~/.cache/huggingface, at first run on any
 # laptop. This step only depends on requirements-docker.txt (already installed
 # above), so it's cached independently of source code changes below.
-COPY download_models.py .
+COPY scripts/download_models.py .
 RUN python download_models.py
 
 # Copy source code and model checkpoints

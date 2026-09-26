@@ -8,7 +8,7 @@ Swaps the from-scratch landmark-MLP emotion classifier (models.EmotionClassifier
     directly on FER-2013's 7 classes.
 
 This was NOT taken on faith from the model card. It was independently verified
-against 1,011 real, held-out images from this project's own fer-2013/test/
+against 1,011 real, held-out images from this project's own data/fer-2013/test/
 (150/class, stratified, seed=42) -- see validate_pretrained_emotion.py:
 
     Overall accuracy: 70.13%   (model card claims 71.16% -- consistent)

@@ -1,0 +1,19 @@
+.git
+.venv
+__pycache__
+*.pyc
+.DS_Store
+
+# Raw training data -- only needed to retrain, not to run the app
+data/
+
+# Generated training artifacts -- only label_map.json is needed at runtime
+features/*.npz
+
+# Generated runtime session output
+demo/output/
+output/
+
+# Docs -- not needed inside the image
+README.md
+INTEGRATION.md
