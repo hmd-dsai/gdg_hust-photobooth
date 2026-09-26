@@ -2,12 +2,12 @@
 validate_pretrained_emotion.py
 
 Independent validation of a candidate pretrained emotion model against this
-project's OWN held-out fer-2013/test images -- not just trusting the model
-card's self-reported numbers. This is what pretrained_emotion.py's accuracy
-claim (70.13%) is based on.
+project's OWN held-out data/fer-2013/test images -- not just trusting the
+model card's self-reported numbers. This is what pretrained_emotion.py's
+accuracy claim (70.13%) is based on.
 
 Usage:
-    python validate_pretrained_emotion.py [--fer-test-root ../fer-2013/test] [--n-per-class 150]
+    python validate_pretrained_emotion.py [--fer-test-root ../data/fer-2013/test] [--n-per-class 150]
 """
 import argparse
 import os
@@ -26,7 +26,7 @@ SEED = 42
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--fer-test-root", default="fer-2013/test")
+    p.add_argument("--fer-test-root", default="data/fer-2013/test")
     p.add_argument("--n-per-class", type=int, default=150, help="Stratified sample size per class.")
     return p.parse_args()
 

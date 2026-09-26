@@ -146,10 +146,10 @@ def load_session_captures(session_dir: str) -> dict:
     return captures
 
 
-def load_references(labeled_dir: str) -> dict:
+def load_references(references_dir: str) -> dict:
     references = {}
     for label in GESTURE_SEQUENCE:
-        path = os.path.join(labeled_dir, LABEL_IMAGE_MAP[label])
+        path = os.path.join(references_dir, LABEL_IMAGE_MAP[label])
         img = cv2.imread(path)
         if img is None:
             raise FileNotFoundError(f"Missing reference: {path}")
@@ -160,7 +160,7 @@ def load_references(labeled_dir: str) -> dict:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--session-dir", help="A photobooth_challenge.py demo/output/session_<ts>/ directory.")
-    p.add_argument("--labeled-dir", default=os.path.join(PROJECT_ROOT, "labeled"))
+    p.add_argument("--reference-dir", default=os.path.join(PROJECT_ROOT, "reference_photos"))
     p.add_argument("--frame", default=FRAME_PATH)
     p.add_argument("--output", help="Where to save the result (default: <session-dir>/framed_strip.jpg)")
     p.add_argument("--detect-slots", action="store_true", help="Print measured slot coordinates and exit.")
@@ -179,7 +179,7 @@ def main():
         raise SystemExit("Pass --session-dir <path> or --detect-slots.")
 
     captures = load_session_captures(args.session_dir)
-    references = load_references(args.labeled_dir)
+    references = load_references(args.reference_dir)
     result = build_framed_strip(captures, references, args.frame)
 
     output_path = args.output or os.path.join(args.session_dir, "framed_strip.jpg")

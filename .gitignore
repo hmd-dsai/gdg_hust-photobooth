@@ -7,12 +7,12 @@ __pycache__/
 .DS_Store
 
 # Datasets -- large raw image data, not source code.
-# fer-2013/ is the public Kaggle FER-2013 dataset (re-downloadable).
-# dataset/ is this project's own webcam-collected gesture data (gdg/, noise/);
-# not tracked here due to size (~672M), but it isn't reproducible from a
-# public source the way fer-2013/ is -- keep it backed up separately.
-fer-2013/
-dataset/
+# data/fer-2013/ is the public Kaggle FER-2013 dataset (re-downloadable).
+# data/gesture/ is this project's own webcam-collected gesture data (gdg/,
+# noise/); not tracked here due to size (~672M), but it isn't reproducible
+# from a public source the way data/fer-2013/ is -- keep it backed up separately.
+data/fer-2013/
+data/gesture/
 
 # Generated features/checkpoints -- rebuild via pipeline/preprocess.py and
 # pipeline/train.py (see README's "Retraining the hand-gesture model").

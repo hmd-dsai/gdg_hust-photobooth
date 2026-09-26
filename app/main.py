@@ -29,7 +29,7 @@ from frame_compositor import build_framed_strip, load_references
 
 CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "checkpoints")
 FEATURES_DIR = os.path.join(PROJECT_ROOT, "features")
-LABELED_DIR = os.path.join(PROJECT_ROOT, "labeled")
+REFERENCE_PHOTOS_DIR = os.path.join(PROJECT_ROOT, "reference_photos")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -63,7 +63,7 @@ def startup_event():
     print(f"Pipeline loaded on device: {pipeline.device}")
 
     print("Loading reference panels...")
-    reference_panels = load_reference_panels(LABELED_DIR, panel_size=480)
+    reference_panels = load_reference_panels(REFERENCE_PHOTOS_DIR, panel_size=480)
     print(f"Loaded {len(reference_panels)} reference panels.")
 
 
@@ -126,7 +126,7 @@ def get_reference_image(label: str):
     if label not in LABEL_IMAGE_MAP:
         raise HTTPException(status_code=404, detail=f"Label '{label}' not found.")
     filename = LABEL_IMAGE_MAP[label]
-    filepath = os.path.join(LABELED_DIR, filename)
+    filepath = os.path.join(REFERENCE_PHOTOS_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="File missing.")
     media_type = "image/jpeg" if filename.endswith((".jpg", ".jpeg")) else "image/png"
@@ -273,7 +273,7 @@ def verify_imgur(req: ImgurVerifyRequest):
         raise HTTPException(status_code=400, detail="Client ID cannot be empty.")
 
     # Try an upload with the sample image
-    test_path = os.path.join(LABELED_DIR, "happy.jpg")
+    test_path = os.path.join(REFERENCE_PHOTOS_DIR, "happy.jpg")
     url = upload_to_imgur(test_path, cid)
     if url:
         return {"valid": True, "url": url, "message": "Imgur Client ID hoạt động xuất sắc!"}
@@ -301,7 +301,7 @@ def compose_strip(req: ComposeRequest):
         cv2.imwrite(os.path.join(session_dir, f"{label}.jpg"), user_img)  # save raw capture
         captures[label] = user_img
 
-    references = load_references(LABELED_DIR)
+    references = load_references(REFERENCE_PHOTOS_DIR)
     final_strip = build_framed_strip(captures, references)
 
     strip_path = os.path.join(session_dir, "photobooth_strip.jpg")
