@@ -16,5 +16,4 @@ output/
 
 # Docs -- not needed inside the image
 README.md
-README_PACKAGING.md
 INTEGRATION.md
