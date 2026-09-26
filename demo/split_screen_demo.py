@@ -16,7 +16,7 @@ Shows a 1x2 split screen instead of a text label overlay:
            saved, so there's never a mismatch between what you see and what
            gets analyzed.
   - right: the reference photo for whatever the pipeline just predicted
-           (from labeled/), square-cropped and size-normalized so all 8
+           (from reference_photos/), square-cropped and size-normalized so all 8
            reference photos -- which arrive in wildly different sizes and
            aspect ratios -- display consistently.
 
@@ -94,11 +94,11 @@ def square_crop_resize(img: np.ndarray, size: int) -> np.ndarray:
     return cv2.resize(cropped, (size, size), interpolation=interp)
 
 
-def load_reference_panels(labeled_dir: str, panel_size: int) -> dict:
+def load_reference_panels(references_dir: str, panel_size: int) -> dict:
     """Preprocess every reference photo once at startup -> {label: square BGR image}."""
     panels = {}
     for label, filename in LABEL_IMAGE_MAP.items():
-        path = os.path.join(labeled_dir, filename)
+        path = os.path.join(references_dir, filename)
         img = cv2.imread(path)
         if img is None:
             print(f"  [warn] could not load reference image for '{label}': {path}")
@@ -143,7 +143,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--camera", type=int, default=0)
     p.add_argument("--checkpoints-dir", default=os.path.join(PROJECT_ROOT, "checkpoints"))
     p.add_argument("--features-dir", default=os.path.join(PROJECT_ROOT, "features"))
-    p.add_argument("--labeled-dir", default=os.path.join(PROJECT_ROOT, "labeled"))
+    p.add_argument("--reference-dir", default=os.path.join(PROJECT_ROOT, "reference_photos"))
     p.add_argument("--panel-size", type=int, default=480, help="Side length (px) of the square reference panel.")
     p.add_argument("--threshold", type=float, default=DEFAULT_GESTURE_THRESHOLD)
     return p.parse_args()
@@ -152,8 +152,8 @@ def parse_args() -> argparse.Namespace:
 def main():
     args = parse_args()
 
-    print(f"Loading reference panels from {args.labeled_dir} ...")
-    panels = load_reference_panels(args.labeled_dir, args.panel_size)
+    print(f"Loading reference panels from {args.reference_dir} ...")
+    panels = load_reference_panels(args.reference_dir, args.panel_size)
     placeholder = make_placeholder_panel(args.panel_size, "no face / gesture")
 
     with GestureEmotionPipeline(args.checkpoints_dir, args.features_dir, static_image_mode=False) as pipeline:
