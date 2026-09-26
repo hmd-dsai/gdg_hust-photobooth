@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "demo"))
 
 from inference import DEFAULT_GESTURE_THRESHOLD, GestureEmotionPipeline
 from split_screen_demo import LABEL_IMAGE_MAP, crop_to_aspect, load_reference_panels
-from frame_compositor import build_framed_strip, load_references
+from .frame_compositor import build_framed_strip, load_references
 
 CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "checkpoints")
 FEATURES_DIR = os.path.join(PROJECT_ROOT, "features")
@@ -283,7 +283,7 @@ def verify_imgur(req: ImgurVerifyRequest):
 
 @app.post("/api/challenge/compose")
 def compose_strip(req: ComposeRequest):
-    """Composes the GDG-designed Photobooth Strip (demo/assets/frame.png) from 4 challenge captures."""
+    """Composes the GDG-designed Photobooth Strip (app/static/branding/frame.png) from 4 challenge captures."""
     missing = [k for k in GESTURE_SEQUENCE if k not in req.captures]
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing captures for: {missing}")

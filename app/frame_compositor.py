@@ -2,7 +2,7 @@
 frame_compositor.py
 
 Composites 4 player captures + 4 reference photos into the designed GDG
-photobooth frame (demo/assets/frame.png).
+photobooth frame (app/static/branding/frame.png).
 
 Layering order matters: photos are placed onto a blank canvas FIRST, and the
 frame (with its alpha channel) is drawn on top of that SECOND. This is the
@@ -23,11 +23,11 @@ frame is ever redesigned/replaced, rather than hand-editing coordinates again.
 
 Usage:
     # Build a strip from a photobooth_challenge.py session directory:
-    python frame_compositor.py --session-dir demo/output/session_<timestamp>
+    python app/frame_compositor.py --session-dir demo/output/session_<timestamp>
 
     # Re-detect slot coordinates from a new/updated frame.png (prints a dict
     # you can paste in to replace SLOTS below):
-    python frame_compositor.py --detect-slots
+    python app/frame_compositor.py --detect-slots
 """
 
 import argparse
@@ -38,11 +38,11 @@ import cv2
 import numpy as np
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "demo"))
 
 from split_screen_demo import LABEL_IMAGE_MAP  # noqa: E402
 
-FRAME_PATH = os.path.join(os.path.dirname(__file__), "assets", "frame.png")
+FRAME_PATH = os.path.join(os.path.dirname(__file__), "static", "branding", "frame.png")
 GESTURE_SEQUENCE = ["happy", "angry", "surprise", "gdg"]  # row order, top to bottom
 
 # (x1, y1, x2, y2) in frame.png's own pixel space, verified against the frame's
